@@ -94,6 +94,12 @@ class RpcValue():
 			s.m_type = t
 		if s.m_type not in chainpackTypeFromPythonType(type(s.m_value)):
 			raise ChainpackTypeException("python type %s for value %s does not match chainpack type %s"%(type(s.m_value), s.m_value, s.m_type))
+	@property
+	def value(s):
+		return s.m_value
+	@property
+	def type(s):
+		return s.m_type
 	def __str__(s):
 		out = ""
 		if len(s.m_metaData):
@@ -164,11 +170,15 @@ class Blob(bytearray):
 	def __str__(s):
 		return super().__repr__() + str([bin(x) for x in s])
 
+	def add(s, x: bytearray):
+		for i in x:
+			s.append(i)
+
 	def write(s, value: RpcValue) -> int:
 		if(not value.isValid()):
 			raise ChainpackTypeException("Cannot serialize invalid ChainPack.");
 		x = Blob.pack(value)
-		s.append(x)
+		s.add(x)
 		return len(x)
 
 	@classmethod
@@ -183,6 +193,7 @@ class Blob(bytearray):
 		else:
 			out.append(value.m_type)
 			out.writeData(value)
+		return out
 
 	def writeMetaData(s, md: MetaData):
 		imap = RpcValue({}, TypeInfo.IMap)
@@ -205,9 +216,9 @@ class Blob(bytearray):
 		t = val.m_type # type: Type
 		if   t == Type.Null:    return
 		elif t == Type.Bool:     s.append([b'0', b'1'][v])
-		elif t == Type.UInt:     s.write_fmt(UINT_FMT, v)
-		elif t == Type.Int:      s.write_fmt(INT_FMT, v)
-		elif t == Type.Double:   s.write_fmt(DOUBLE_FMT, v)
+		elif t == Type.UInt:     s.write_fmt(s.UINT_FMT, v)
+		elif t == Type.Int:      s.write_fmt(s.INT_FMT, v)
+		elif t == Type.Double:   s.write_fmt(s.DOUBLE_FMT, v)
 		elif t == Type.DateTime: s.write_DateTime(v)
 		elif t == Type.String:   s.write_Blob(v)
 		elif t == Type.Blob:     s.write_Blob(v)
@@ -246,23 +257,25 @@ class Blob(bytearray):
 		s.pop_front(size)
 		return r
 
-	def write_fmt(fmt, value):
-		append(struct.pack(fmt, value))
+	def write_fmt(s, fmt, value):
+		print(type(value))
+		s.add(struct.pack(fmt, value))
     #
 	# def write_Double(s, d):
     #
 	# def read_Double(s) -> Double:
     #
 	# def write_Int(s, i):
+	def get(s):
+		return s.pop(0)
 
 	def read(s):
-		RpcValue: ret;
-		dict: metadata = readMetaData(data);
-		int: t = data.get();
+		metadata = s.readMetaData();
+		t: int = s.get();
 		if(t < 128) :
 			if(t & 64) :
 				#// tiny Int
-				int: n = t & 63;
+				n: int = t & 63;
 				ret = RpcValue(n, Type.Int);
 			else:
 				#// tiny UInt
@@ -284,9 +297,9 @@ class Blob(bytearray):
 		return s[0]
 
 	def readMetaData(s) -> dict:
-		MetaData: ret;
+		ret = MetaData()
 		while True:
-			int: type_info = s.peek();
+			type_info: int = s.peek();
 			if type_info == TypeInfo.META_TYPE_ID:
 				s.pop(0)
 				uint: u = s.read_UIntData();
@@ -303,7 +316,7 @@ class Blob(bytearray):
 		return ret;
 
 	def readTypeInfo(s) -> (TypeInfo, RpcValue, int):
-		int: t = s.get()[0]
+		int: t = s.get()
 		meta = None
 		if(t & 128):
 			t = t & ~128;
@@ -330,7 +343,7 @@ class Blob(bytearray):
 			elif t == TypeInfo.List:     return RpcValue(s.readData_List(data))
 			elif t == TypeInfo.Map:      return RpcValue(s.readData_Map(data))
 			elif t == TypeInfo.IMap:     return RpcValue(s.readData_IMap(data), TypeInfo.IMap)
-			elif t == TypeInfo.Bool:     return RpcValue(s.get() != b'0')
+			elif t == TypeInfo.Bool:     return RpcValue(s.get() != b'\0')
 			else: raise	ChainpackTypeException("Internal error: attempt to read meta type directly. type: " + str(t) + " " + t.__name__)
 
 

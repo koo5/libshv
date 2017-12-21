@@ -41,10 +41,10 @@ def testTinyUint():
 
 def testIMap():
 	print("------------- IMap")
-	map = RpcValue([
+	map = RpcValue(dict([
 		(1, "foo"),
 		(2, "bar"),
-		(3, "baz")], Type.IMap)
+		(3, "baz")]), Type.IMap)
 	cp1 = RpcValue(map)
 	out = Blob()
 	len = out.write(cp1)
