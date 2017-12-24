@@ -258,8 +258,8 @@ class Blob(bytearray):
 	"""
 
 	def writeData(s, val: RpcValue):
-		v = val.m_value
-		t = val.m_type # type: Type
+		v = val.value
+		t = val.type # type: Type
 		if   t == Type.Null:    return
 		elif t == Type.Bool:     s.append([b'0', b'1'][v])
 		elif t == Type.UInt:     s.write_UIntData(v)
@@ -269,11 +269,16 @@ class Blob(bytearray):
 		elif t == Type.String:   s.write_Blob(v)
 		elif t == Type.Blob:     s.write_Blob(v)
 		elif t == Type.List:     s.writeData_List(v)
-		elif t == Type.Array:    s.writeData_Array(v)
+		elif t == Type.Array:    s.writeData_List(v)
 		elif t == Type.Map:      s.writeData_Map(v)
 		elif t == Type.IMap:     s.writeData_IMap(v)
 		elif t == Type.INVALID:  raise ChainpackTypeException("Internal error: attempt to write invalid type data")
 		elif t == Type.MetaIMap:	raise ChainpackTypeException("Internal error: attempt to write metatype directly")
+
+	def writeData_List(s, v: list):
+		for i in v:
+			s.writeData(i)
+		s.append(TypeInfo.TERM)
 
 	def write_UIntData(s, v: int):
 		s.write_fmt(s.UINT_FMT, v)
@@ -296,7 +301,13 @@ class Blob(bytearray):
 			s.pop(0)
 
 	def read_UIntData(s):
-		return s.read_fmt(s.FMT_UINT)
+		return s.read_fmt(s.UINT_FMT)
+
+	def read_IntData(s):
+		return s.read_fmt(s.INT_FMT)
+
+	def read_Double(s):
+		return s.read_fmt(s.DOUBLE_FMT)
 
 	def readData_IMap(s) -> RpcValue:
 		ret = RpcValue({}, Type.IMap)
@@ -304,13 +315,30 @@ class Blob(bytearray):
 		for i in range(map_size):
 			key = s.read_UIntData()
 			ret.value[key] = s.read()
+		#TERM?
+		return ret
+
+	def readData_Map(s) -> RpcValue:
+		ret = RpcValue({}, Type.Map)
+		map_size: int = s.read_UIntData()
+		for i in range(map_size):
+			key = s.read()
+			ret.value[key] = s.read()
+		#TERM?
 		return ret
 
 	def writeData_IMap(s, map: dict) -> None:
 		assert type(map) == dict
 		#write_fmt(FMT_UINT, len(map))
 		for k, v in map.items():
-			s.write_fmt(s.FMT_UINT, k)
+			s.write_fmt(s.UINT_FMT, k)
+			s.write(v)
+		s.append(TypeInfo.TERM)
+
+	def writeData_Map(s, map: dict) -> None:
+		assert type(map) == dict
+		for k, v in map.items():
+			s.write_Blob(k)
 			s.write(v)
 		s.append(TypeInfo.TERM)
 
@@ -389,6 +417,13 @@ class Blob(bytearray):
 #			return TypeInfo.UInt, meta, t - 64;
 #		else: return t, meta
 
+	def readData_Array(s, item_type_info):
+		#item_type = typeInfoToType(item_type_info)
+		ret = RpcValue([], Type.Array)
+		size: int = s.read_UIntData()
+		for i in range(size):
+			ret.value.append(readData(item_type_info, False))
+
 	def readData(s, t: TypeInfo, is_array: bool) -> RpcValue:
 		if(is_array):
 			val: list = s.readData_Array(t);
@@ -407,7 +442,7 @@ class Blob(bytearray):
 			elif t == TypeInfo.Map:      return RpcValue(s.readData_Map())
 			elif t == TypeInfo.IMap:     return RpcValue(s.readData_IMap(), TypeInfo.IMap)
 			elif t == TypeInfo.Bool:     return RpcValue(s.get() != b'\0')
-			else: raise	ChainpackTypeException("Internal error: attempt to read meta type directly. type: " + str(t) + " " + t.__name__)
+			else: raise	ChainpackTypeException("Internal error: attempt to read meta type directly. type: " + str(t) + " " + t._name_)
 
 
 
