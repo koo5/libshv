@@ -357,16 +357,18 @@ class Blob(bytearray):
 		map_size: int = s.read_UIntData()
 		for i in range(map_size):
 			key = s.read()
+			if key == TypeInfo.TERM:
+				break
 			ret.value[key] = s.read()
-		if s.read() != TypeInfo.TERM:
-			raise ChainpackDeserializationException()
 		return ret
 
 	def writeData_IMap(s, map: dict) -> None:
 		assert type(map) == dict
 		#write_fmt(FMT_UINT, len(map))
 		for k, v in map.items():
-			s.write_fmt(s.UINT_FMT, k)
+			if k.type != Type.UInt:
+				raise ChainpackTypeException('k.type != Type.UInt')
+			s.write(k)
 			s.write(v)
 		s.append(TypeInfo.TERM)
 
@@ -387,7 +389,7 @@ class Blob(bytearray):
 		print(type(value))
 		s.add(struct.pack(fmt, value))
 
-   def get(s):
+	def get(s):
 		return s.pop(0)
 
 	def read(s):
