@@ -110,7 +110,7 @@ def typeInfoToType(type_info: TypeInfo) -> Type:
 def chainpackTypeFromPythonType(t):
 	if t == type(None):  return Type.Null,
 	if t == bool:        return Type.Bool,
-	if t == int:         return Type.Int,
+	if t == int:         return Type.Int, Type.UInt,
 	if t == float:       return Type.Double,
 	if t == datetime:    return Type.DateTime,
 	if t == str:         return Type.String,
@@ -144,7 +144,10 @@ class RpcValue():
 			elif type(value) == dict:
 				s.m_value = {}
 				for k,v in value.items():
-					s.m_value[RpcValue(k)] = RpcValue(v)
+					if t == Type.IMap:
+						s.m_value[RpcValue(k, Type.UInt)] = RpcValue(v)
+					else:
+						s.m_value[RpcValue(k)] = RpcValue(v)
 			else:
 				s.m_value = value
 
@@ -153,6 +156,7 @@ class RpcValue():
 			s.m_type = t
 		if s.m_type not in chainpackTypeFromPythonType(type(s.m_value)):
 			raise ChainpackTypeException("python type %s for value %s does not match chainpack type %s"%(type(s.m_value), s.m_value, s.m_type))
+
 	@property
 	def value(s):
 		return s.m_value
@@ -306,8 +310,8 @@ class Blob(bytearray):
 		s.write_fmt(s.UINT_FMT, v)
 
 	def write_Blob(s, b):
-		assert type(b) == bytearray
-		write_UIntData(len(b))
+		assert type(b) in (bytearray, bytes)
+		s.write_UIntData(len(b))
 		for i in b:
 			s.append(i)
 
@@ -381,7 +385,7 @@ class Blob(bytearray):
 
 	def read_fmt(s, fmt):
 		size = struct.calcsize(fmt)
-		r = struct.unpack(fmt, s)
+		r = struct.unpack(fmt, s[:8])
 		s.pop_front(size)
 		return r
 
@@ -395,23 +399,21 @@ class Blob(bytearray):
 	def read(s):
 		metadata = s.readMetaData();
 		t: int = s.get();
-		if(t < 128) :
+		if t < 128:
 			if(t & 64) :
 				#// tiny Int
 				n: int = t & 63;
 				ret = RpcValue(n, Type.Int);
 			else:
 				#// tiny UInt
-				uint: n = t & 63;
+				n: int = t & 63;
 				ret = RpcValue(n, Type.UInt);
-		elif type in [TypeInfo.TRUE, TypeInfo.FALSE]:
+		elif t in [TypeInfo.TRUE, TypeInfo.FALSE]:
 			ret = RpcValue(t == TypeInfo.TRUE)
 		else:
-			bool: is_array = t & ARRAY_FLAG_MASK;
+			is_array: bool = t & ARRAY_FLAG_MASK;
 			type = t & ~ARRAY_FLAG_MASK;
-			#//ChainPackProtocol::TypeInfo::Enum value_type = is_array? type: ChainPackProtocol::TypeInfo::INVALID;
-			#//ChainPackProtocol::TypeInfo::Enum array_type = is_array? type: ChainPackProtocol::TypeInfo::INVALID;
-			ret = readData(type, is_array, data);
+			ret = s.readData(type, is_array);
 		if len(metadata):
 			ret.setMetaData(metadata.deepcopy())
 		return ret;
