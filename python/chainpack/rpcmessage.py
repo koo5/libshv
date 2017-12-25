@@ -17,7 +17,7 @@ class RpcMessage():
 
 	def __init__(self, val: RpcValue) -> None:
 		assert(val.isIMap());
-		RpcValue: m_value = val;
+		s._value: RpcValue = val;
 
 #	def hasKey(s, key: Key) -> bool:
 #		assert(m_value.type == Type.IMap)
