@@ -7,6 +7,7 @@ except:
 	pass
 from hypothesis import given
 from hypothesis.strategies import *
+
 from value import *
 
 def test1():

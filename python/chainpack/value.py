@@ -13,6 +13,8 @@ ARRAY_FLAG_MASK = 64
 
 class ChainpackTypeException(Exception):
 	pass
+class ChainpackDeserializationException(Exception):
+	pass
 
 class MetaData(dict):
 	pass
@@ -135,7 +137,17 @@ class RpcValue():
 			s.m_metaData = deepcopy(value.m_metaData)
 		else:
 			s.m_metaData = {}
-			s.m_value = value
+			if type(value) == list:
+				s.m_value = []
+				for i in value:
+					s.m_value.append(RpcValue(i))
+			elif type(value) == dict:
+				s.m_value = {}
+				for k,v in value.items():
+					s.m_value[RpcValue(k)] = RpcValue(v)
+			else:
+				s.m_value = value
+
 			if t == None:
 				t = chainpackTypeFromPythonType(type(value))[0]
 			s.m_type = t
@@ -266,7 +278,7 @@ class Blob(bytearray):
 		elif t == Type.Int:      s.write_fmt(s.INT_FMT, v)
 		elif t == Type.Double:   s.write_fmt(s.DOUBLE_FMT, v)
 		elif t == Type.DateTime: s.write_DateTime(v)
-		elif t == Type.String:   s.write_Blob(v)
+		elif t == Type.String:   s.write_String(v)
 		elif t == Type.Blob:     s.write_Blob(v)
 		elif t == Type.List:     s.writeData_List(v)
 		elif t == Type.Array:    s.writeData_List(v)
@@ -280,18 +292,39 @@ class Blob(bytearray):
 			s.writeData(i)
 		s.append(TypeInfo.TERM)
 
+	def readData_List(s) -> list:
+		r = []
+		while True:
+			i = s.read()
+			if i == TypeInfo.TERM:
+				break
+			r.append(i)
+		return r
+
+
 	def write_UIntData(s, v: int):
 		s.write_fmt(s.UINT_FMT, v)
 
-	def write_Blob(s, v):
-		b = v
-		if type(v) == str:
-			b = v.encode('utf-8')
-		else:
-			assert type(v) == bytearray
+	def write_Blob(s, b):
+		assert type(b) == bytearray
 		write_UIntData(len(b))
 		for i in b:
 			s.append(i)
+
+	def write_String(s, v):
+		b = v.encode('utf-8')
+		s.write_Blob(b)
+
+	def read_Blob(s):
+		r = bytearray()
+		for i in range(s.read_UIntData()):
+			r.append(s.read_UIntData())
+
+	def read_String(s):
+		return s.read_Blob().decode('utf-8')
+
+	def read_DateTime(s):
+		datetime.utcfromtimestamp(s.read_IntData() / 1000)
 
 	def write_DateTime(s, v):
 		s.write_IntData(floor(v.timestamp()*1000))
@@ -315,7 +348,8 @@ class Blob(bytearray):
 		for i in range(map_size):
 			key = s.read_UIntData()
 			ret.value[key] = s.read()
-		#TERM?
+		if s.read() != TypeInfo.TERM:
+			raise ChainpackDeserializationException()
 		return ret
 
 	def readData_Map(s) -> RpcValue:
@@ -324,7 +358,8 @@ class Blob(bytearray):
 		for i in range(map_size):
 			key = s.read()
 			ret.value[key] = s.read()
-		#TERM?
+		if s.read() != TypeInfo.TERM:
+			raise ChainpackDeserializationException()
 		return ret
 
 	def writeData_IMap(s, map: dict) -> None:
@@ -351,13 +386,8 @@ class Blob(bytearray):
 	def write_fmt(s, fmt, value):
 		print(type(value))
 		s.add(struct.pack(fmt, value))
-    #
-	# def write_Double(s, d):
-    #
-	# def read_Double(s) -> Double:
-    #
-	# def write_Int(s, i):
-	def get(s):
+
+   def get(s):
 		return s.pop(0)
 
 	def read(s):
@@ -436,13 +466,14 @@ class Blob(bytearray):
 			elif t == TypeInfo.TRUE:     return RpcValue(True)
 			elif t == TypeInfo.FALSE:    return RpcValue(False)
 			elif t == TypeInfo.DateTime: return RpcValue(s.read_DateTime())
-			elif t == TypeInfo.String:   return RpcValue(s.read_Blob())
+			elif t == TypeInfo.String:   return RpcValue(s.read_String())
 			elif t == TypeInfo.Blob:     return RpcValue(s.read_Blob())
 			elif t == TypeInfo.List:     return RpcValue(s.readData_List())
 			elif t == TypeInfo.Map:      return RpcValue(s.readData_Map())
 			elif t == TypeInfo.IMap:     return RpcValue(s.readData_IMap(), TypeInfo.IMap)
 			elif t == TypeInfo.Bool:     return RpcValue(s.get() != b'\0')
-			else: raise	ChainpackTypeException("Internal error: attempt to read meta type directly. type: " + str(t) + " " + t._name_)
+			else: raise	ChainpackTypeException("Internal error: attempt to read meta type directly. type: " + str(t) + " " + t.name)
+
 
 
 
