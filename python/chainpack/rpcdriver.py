@@ -14,6 +14,8 @@ defaultRpcTimeout = 5000;
 Chunk = str
 
 class RpcDriver():
+	m_messageReceivedCallback = None
+	
 	def sendMessage(msg: RpcValue):
 		out = Blob()
 		out.write(msg)
@@ -77,44 +79,31 @@ class RpcDriver():
 		else:
 			break;
 
-int RpcDriver::processReadData(const std::string &read_data)
-{
-	logRpc() << __FUNCTION__ << "data len:" << read_data.length();
-	using namespace shv::core::chainpack;
+	def tryReadUIntData(s, in):
+		try:
+			return True, read_UIntData(in);
+		except DeserializationException:
+			return False, -1
 
-	std::istringstream in(read_data);
-	bool ok;
+	def processReadData(read_data: bytes) -> int:
+		log("data len:", len(read_data))
+		initial_len = len(read_data)
+		in = Blob(read_data)
+		ok, chunk_len = s.tryRead_UIntData(in);
+		if not ok:
+			return 0;
+		ok, protocol_version:int = s.tryReadUIntData(in);
+		if not ok:
+			return 0;
+		if protocol_version != PROTOCOL_VERSION:
+			raise Exception("Unsupported protocol version");
+		if(chunk_len > len(in)):
+			return 0;
+		msg: RpcValue = in.read()
+		onMessageReceived(msg);
+		return initial_len - len(in);
 
-	uint64_t chunk_len = ChainPackProtocol::readUIntData(in, &ok);
-	if(!ok)
-		return 0;
-
-	size_t read_len = (size_t)in.tellg() + chunk_len;
-
-	uint64_t protocol_version = ChainPackProtocol::readUIntData(in, &ok);
-	if(!ok)
-		return 0;
-
-	if(protocol_version != PROTOCOL_VERSION)
-		SHV_EXCEPTION("Unsupported protocol version");
-
-	logRpc() << "\t chunk len:" << chunk_len << "read_len:" << read_len << "stream pos:" << in.tellg();
-	if(read_len > read_data.length())
-		return 0;
-
-	RpcValue msg = ChainPackProtocol::read(in);
-	onMessageReceived(msg);
-	return read_len;
-}
-
-void RpcDriver::onMessageReceived(const RpcValue &msg)
-{
-	logRpc() << "\t emitting message received:" << msg.toStdString();
-	//logLongFiles() << "\t emitting message received:" << msg.dumpText();
-	if(m_messageReceivedCallback)
-		m_messageReceivedCallback(msg);
-}
-
-} // namespace chainpack
-} // namespace core
-} // namespace shv
+	def onMessageReceived(msg: RpcValue):
+		log("\t emitting message received:" ,msg);
+		if(s.m_messageReceivedCallback):
+			s.m_messageReceivedCallback(msg);

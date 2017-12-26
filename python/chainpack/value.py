@@ -127,9 +127,7 @@ class Tag(enum.IntEnum):
 	USER = 8
 
 
-#@attr.attributes
 class RpcValue():
-	#attr.attrib00
 	def __init__(s, value, t = None):
 		if type(value) == RpcValue:
 			s.m_value = value.m_value
@@ -217,8 +215,10 @@ class Blob(bytearray):
 		raise Exception('calcsize(INT_FMT) != 8')
 
 	def __init__(s, value=None):
-		if value != None:
+		if type(value) == RpcValue:
 			s.write(RpcValue(value))
+		elif isinstance(value, (bytes, bytearray)):
+			super().__init__(value)
 	def __str__(s):
 		return super().__repr__() + str([bin(x) for x in s])
 
@@ -256,7 +256,6 @@ class Blob(bytearray):
 		if len(imap):
 			s.append(TypeInfo.MetaIMap)
 			s.writeData_IMap(imap.value);
-
 
 	"""
 	
@@ -304,7 +303,6 @@ class Blob(bytearray):
 				break
 			r.append(i)
 		return r
-
 
 	def write_UIntData(s, v: int):
 		s.write_fmt(s.UINT_FMT, v)
@@ -478,94 +476,67 @@ class Blob(bytearray):
 			elif t == TypeInfo.Bool:     return RpcValue(s.get() != b'\0')
 			else: raise	ChainpackTypeException("Internal error: attempt to read meta type directly. type: " + str(t) + " " + t.name)
 
-
-
-
-
-"""/* UInt
-   0 ... 127              |0|x|x|x|x|x|x|x|<-- LSB
-  128 ... 16383 (2^14-1)  |1|0|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-2^14 ... 2097151 (2^21-1) |1|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                          |1|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                          |1|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| ... <-- LSB
-                          n ==  0 -> 4 bytes (32 bit number)
-                          n ==  1 -> 5 bytes
-                          n == 14 -> 19 bytes
-                          n == 15 -> for future (number of bytes will be specified in next byte)
-*/"""
+	"""/* UInt
+	   0 ... 127              |0|x|x|x|x|x|x|x|<-- LSB
+	  128 ... 16383 (2^14-1)  |1|0|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+	2^14 ... 2097151 (2^21-1) |1|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+	                          |1|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+	                          |1|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| ... <-- LSB
+	                          n ==  0 -> 4 bytes (32 bit number)
+	                          n ==  1 -> 5 bytes
+	                          n == 14 -> 19 bytes
+	                          n == 15 -> for future (number of bytes will be specified in next byte)
+	*/"""
 
 	UINT_MASK_CNT = 4
 
-def read_UIntData(s):
-	n: int = 0;
-	masks = {127, 63, 31, 15};
-	if(data.eof()) {
-		if(ok) {
-			*ok = false;
-			return 0;
-		}
-		SHV_EXCEPTION("read_UInt: unexpected end of stream!");
-	}
-	uint8_t head = data.get();
-	int len;
-	if((head & 128) == 0) { len = 1; }
-	else if((head & 64) == 0) { len = 2; }
-	else if((head & 32) == 0) { len = 3; }
-	else if((head & 16) == 0) { len = 4; }
-	else { len = (head & 15) + UINT_MASK_CNT + 1; }
-	if(len < 5) {
-		len--;
-		n = head & masks[len];
-	}
-	else {
-		len--;
-	}
-	for (int i = 0; i < len; ++i) {
-		if(data.eof()) {
-			if(ok) {
-				*ok = false;
-				return 0;
-			}
-			SHV_EXCEPTION("read_UInt: unexpected end of stream!");
-		}
-		uint8_t r = data.get();
-		n = (n << 8) + r;
-	};
-	if(ok)
-		*ok = true;
-	return n;
-}
+	def read_UIntData(s):
+		n = 0;
+		masks = (127, 63, 31, 15)
+		if (not len(s)):
+			raise ChainpackDeserializationException("read_UInt: unexpected end of stream!");
+		head:int = s.get();
+		if  (head & 128)== 0: l = 1
+		elif(head & 64) == 0: l = 2
+		elif(head & 32) == 0: l = 3
+		elif(head & 16) == 0: l = 4
+		else: l = (head & 15) + s.UINT_MASK_CNT + 1;
+		l-=1;
+		if(l < 5):
+			n = head & masks[l];
 
-template<typename T>
-void write_UIntData(std::ostream &out, T n)
-{
-	constexpr int UINT_BYTES_MAX = 19;
-	uint8_t bytes[1 + sizeof(T)];
-	constexpr int prefixes[UINT_MASK_CNT] = {0 << 4, 8 << 4, 12 << 4, 14 << 4};
-	int byte_cnt = 0;
-	do {
-		uint8_t r = n & 255;
-		n = n >> 8;
-		bytes[byte_cnt++] = r;
-	} while(n);
-	if(byte_cnt >= UINT_BYTES_MAX)
-		SHV_EXCEPTION("write_UIntData: value too big to pack!");
-	bytes[byte_cnt] = 0;
-	uint8_t msb = bytes[byte_cnt-1];
-	if(byte_cnt == 1)      { if(msb >= 128) byte_cnt++; }
-	else if(byte_cnt == 2) { if(msb >= 64) byte_cnt++; }
-	else if(byte_cnt == 3) { if(msb >= 32) byte_cnt++; }
-	else if(byte_cnt == 4) { if(msb >= 16) byte_cnt++; }
-	else byte_cnt++;
-	if(byte_cnt > UINT_MASK_CNT) {
-		bytes[byte_cnt-1] = 0xF0 | (byte_cnt - UINT_MASK_CNT - 1);
-	}
-	else {
-		uint8_t prefix = (uint8_t)prefixes[byte_cnt-1];
-		bytes[byte_cnt-1] |= prefix;
-	}
-	for (int i = byte_cnt-1; i >= 0; --i) {
-		uint8_t r = bytes[i];
-		out << r;
-	}
-}
+		for i in range(l):
+			if (not len(s)):
+				raise ChainpackDeserializationException("read_UInt: unexpected end of stream!");
+			r = s.get();
+			n = (n << 8) + r;
+		return n;
+
+	def write_UIntData(s, n: int):
+		UINT_BYTES_MAX = 19;
+		out = bytearray()
+		prefixes = (0 << 4, 8 << 4, 12 << 4, 14 << 4);
+		while True:
+			r = n & 255;
+			n = n >> 8;
+			out.append(r)
+			if not n:
+				break
+		if(len(out) >= UINT_BYTES_MAX):
+			raise Exception("write_UIntData: value too big to pack!");
+		out.append(0)
+		msb = out[-1];
+		byte_cnt = len(out)
+		if (((byte_cnt == 1) and (msb >= 128))
+		or ((byte_cnt == 2) and (msb >= 64))
+		or ((byte_cnt == 3) and (msb >= 32))
+		or ((byte_cnt == 4) and (msb >= 16))
+		or (byte_cnt > 4)):
+			out.append(0)
+		if(len(out) > s.UINT_MASK_CNT):
+			out[-1] = 0xF0 | (len(out) - s.UINT_MASK_CNT - 1);
+		else:
+			prefix = prefixes[len(out)-1];
+			out[-1] |= prefix;
+		out.reverse()
+		s.add(out)
