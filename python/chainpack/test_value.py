@@ -54,14 +54,14 @@ def testIMap():
 	assert cp1, cp2
 
 def testIMap2():
-	map = RpcValue(Type.IMap, cp1({[
+	map = RpcValue(dict([
 		(127, RpcValue([11,12,13])),
 		(128, 2),
-		(129, 3)]}))
+		(129, 3)]), Type.IMap)
 	out = Blob()
-	int: len = out.write(cp1)
-	RpcValue: cp2 = out.read()
-	print(cp1," " ,cp2," len: " ,len ," dump: " ,out);
+	l: int = out.write(map)
+	cp2: RpcValue = out.read()
+	print(cp1," " ,cp2," len: " ,l ," dump: " ,out);
 	assert cp1 == cp2
 	assert cp1.type == cp2.type
 	assert cp1.toIMap() == cp2.toIMap()

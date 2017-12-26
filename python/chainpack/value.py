@@ -142,7 +142,7 @@ class RpcValue():
 			elif type(value) == dict:
 				s.m_value = {}
 				for k,v in value.items():
-					if t == TypeInfo.IMap:
+					if t == Type.IMap:
 						s.m_value[RpcValue(k, Type.UInt)] = RpcValue(v)
 					else:
 						s.m_value[RpcValue(k)] = RpcValue(v)
@@ -357,7 +357,7 @@ class Blob(bytearray):
 		if   t == Type.Null:    return
 		elif t == Type.Bool:     s.append([b'0', b'1'][v])
 		elif t == Type.UInt:     s.write_UIntData(v)
-		elif t == Type.Int:      s.write_fmt(s.INT_FMT, v)
+		elif t == Type.Int:      s.write_IntData(v)
 		elif t == Type.Double:   s.write_fmt(s.DOUBLE_FMT, v)
 		elif t == Type.DateTime: s.write_DateTime(v)
 		elif t == Type.String:   s.write_String(v)
