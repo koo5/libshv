@@ -54,7 +54,7 @@ def testIMap():
 	assert cp1, cp2
 
 def testIMap2():
-	map = RpcValue(Type.IMap,  cp1({[
+	map = RpcValue(Type.IMap, cp1({[
 		(127, RpcValue([11,12,13])),
 		(128, 2),
 		(129, 3)]}))

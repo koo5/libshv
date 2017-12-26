@@ -142,7 +142,7 @@ class RpcValue():
 			elif type(value) == dict:
 				s.m_value = {}
 				for k,v in value.items():
-					if t == Type.IMap:
+					if t == TypeInfo.IMap:
 						s.m_value[RpcValue(k, Type.UInt)] = RpcValue(v)
 					else:
 						s.m_value[RpcValue(k)] = RpcValue(v)
@@ -175,7 +175,7 @@ class RpcValue():
 		value = RpcValue(value)
 		if tag in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
 			if value.m_type == TypeInfo.Int:
-				value = RpcValue(value.m_value, TypeInfo.UInt)
+				value = RpcValue(value.m_value, Type.UInt)
 		s.m_metaData[tag] = value
 	def isValid(s):
 		return s.m_type != Type.INVALID
@@ -209,22 +209,51 @@ def optimizeRpcValueIntoType(pack: RpcValue) -> int:
 
 class Blob(bytearray):
 	DOUBLE_FMT = '!d'
-	INT_FMT = 'l'
-	UINT_FMT = 'L'
-	if struct.calcsize(INT_FMT) != 8:
-		raise Exception('calcsize(INT_FMT) != 8')
 
 	def __init__(s, value=None):
 		if type(value) == RpcValue:
 			s.write(RpcValue(value))
 		elif isinstance(value, (bytes, bytearray)):
 			super().__init__(value)
+
 	def __str__(s):
 		return super().__repr__() + str([bin(x) for x in s])
 
 	def add(s, x: bytearray):
 		for i in x:
 			s.append(i)
+
+	def get(s):
+		return s.pop(0)
+
+	def peek(s):
+		return s[0]
+
+	def pop_front(s, size: int):
+		for i in range(size):
+			s.pop(0)
+
+	def read(s):
+		metadata = s.readMetaData();
+		t: int = s.get();
+		if t < 128:
+			if(t & 64) :
+				#// tiny Int
+				n: int = t & 63;
+				ret = RpcValue(n, Type.Int);
+			else:
+				#// tiny UInt
+				n: int = t & 63;
+				ret = RpcValue(n, Type.UInt);
+		elif t in [TypeInfo.TRUE, TypeInfo.FALSE]:
+			ret = RpcValue(t == TypeInfo.TRUE)
+		else:
+			is_array: bool = t & ARRAY_FLAG_MASK;
+			type = t & ~ARRAY_FLAG_MASK;
+			ret = s.readData(type, is_array);
+		if len(metadata):
+			ret.setMetaData(metadata.deepcopy())
+		return ret;
 
 	def write(s, value: RpcValue) -> int:
 		if(not value.isValid()):
@@ -251,12 +280,6 @@ class Blob(bytearray):
 			out.writeData(value)
 		return out
 
-	def writeMetaData(s, md: MetaData):
-		imap = RpcValue(md, TypeInfo.IMap)
-		if len(imap):
-			s.append(TypeInfo.MetaIMap)
-			s.writeData_IMap(imap.value);
-
 	"""
 	
 		for key in md.keys():
@@ -271,153 +294,6 @@ class Blob(bytearray):
 				imap.value[key] = md[key]
 		if len(imap):
 	"""
-
-	def writeData(s, val: RpcValue):
-		v = val.value
-		t = val.type # type: Type
-		if   t == Type.Null:    return
-		elif t == Type.Bool:     s.append([b'0', b'1'][v])
-		elif t == Type.UInt:     s.write_UIntData(v)
-		elif t == Type.Int:      s.write_fmt(s.INT_FMT, v)
-		elif t == Type.Double:   s.write_fmt(s.DOUBLE_FMT, v)
-		elif t == Type.DateTime: s.write_DateTime(v)
-		elif t == Type.String:   s.write_String(v)
-		elif t == Type.Blob:     s.write_Blob(v)
-		elif t == Type.List:     s.writeData_List(v)
-		elif t == Type.Array:    s.writeData_List(v)
-		elif t == Type.Map:      s.writeData_Map(v)
-		elif t == Type.IMap:     s.writeData_IMap(v)
-		elif t == Type.INVALID:  raise ChainpackTypeException("Internal error: attempt to write invalid type data")
-		elif t == Type.MetaIMap:	raise ChainpackTypeException("Internal error: attempt to write metatype directly")
-
-	def writeData_List(s, v: list):
-		for i in v:
-			s.writeData(i)
-		s.append(TypeInfo.TERM)
-
-	def readData_List(s) -> list:
-		r = []
-		while True:
-			i = s.read()
-			if i == TypeInfo.TERM:
-				break
-			r.append(i)
-		return r
-
-	def write_UIntData(s, v: int):
-		s.write_fmt(s.UINT_FMT, v)
-
-	def write_Blob(s, b):
-		assert type(b) in (bytearray, bytes)
-		s.write_UIntData(len(b))
-		for i in b:
-			s.append(i)
-
-	def write_String(s, v):
-		b = v.encode('utf-8')
-		s.write_Blob(b)
-
-	def read_Blob(s):
-		r = bytearray()
-		for i in range(s.read_UIntData()):
-			r.append(s.read_UIntData())
-
-	def read_String(s):
-		return s.read_Blob().decode('utf-8')
-
-	def read_DateTime(s):
-		datetime.utcfromtimestamp(s.read_IntData() / 1000)
-
-	def write_DateTime(s, v):
-		s.write_IntData(floor(v.timestamp()*1000))
-
-	def pop_front(s, size: int):
-		for i in range(size):
-			s.pop(0)
-
-	def read_UIntData(s):
-		return s.read_fmt(s.UINT_FMT)
-
-	def read_IntData(s):
-		return s.read_fmt(s.INT_FMT)
-
-	def read_Double(s):
-		return s.read_fmt(s.DOUBLE_FMT)
-
-	def readData_IMap(s) -> RpcValue:
-		ret = RpcValue({}, Type.IMap)
-		map_size: int = s.read_UIntData()
-		for i in range(map_size):
-			key = s.read_UIntData()
-			ret.value[key] = s.read()
-		if s.read() != TypeInfo.TERM:
-			raise ChainpackDeserializationException()
-		return ret
-
-	def readData_Map(s) -> RpcValue:
-		ret = RpcValue({}, Type.Map)
-		map_size: int = s.read_UIntData()
-		for i in range(map_size):
-			key = s.read()
-			if key == TypeInfo.TERM:
-				break
-			ret.value[key] = s.read()
-		return ret
-
-	def writeData_IMap(s, map: dict) -> None:
-		assert type(map) == dict
-		#write_fmt(FMT_UINT, len(map))
-		for k, v in map.items():
-			if k.type != Type.UInt:
-				raise ChainpackTypeException('k.type != Type.UInt')
-			s.write(k)
-			s.write(v)
-		s.append(TypeInfo.TERM)
-
-	def writeData_Map(s, map: dict) -> None:
-		assert type(map) == dict
-		for k, v in map.items():
-			s.write_Blob(k)
-			s.write(v)
-		s.append(TypeInfo.TERM)
-
-	def read_fmt(s, fmt):
-		size = struct.calcsize(fmt)
-		r = struct.unpack(fmt, s[:8])
-		s.pop_front(size)
-		return r
-
-	def write_fmt(s, fmt, value):
-		print(type(value))
-		s.add(struct.pack(fmt, value))
-
-	def get(s):
-		return s.pop(0)
-
-	def read(s):
-		metadata = s.readMetaData();
-		t: int = s.get();
-		if t < 128:
-			if(t & 64) :
-				#// tiny Int
-				n: int = t & 63;
-				ret = RpcValue(n, Type.Int);
-			else:
-				#// tiny UInt
-				n: int = t & 63;
-				ret = RpcValue(n, Type.UInt);
-		elif t in [TypeInfo.TRUE, TypeInfo.FALSE]:
-			ret = RpcValue(t == TypeInfo.TRUE)
-		else:
-			is_array: bool = t & ARRAY_FLAG_MASK;
-			type = t & ~ARRAY_FLAG_MASK;
-			ret = s.readData(type, is_array);
-		if len(metadata):
-			ret.setMetaData(metadata.deepcopy())
-		return ret;
-
-	def peek(s):
-		return s[0]
 
 	def readMetaData(s) -> MetaData:
 		ret = MetaData()
@@ -439,6 +315,12 @@ class Blob(bytearray):
 				break;
 		return ret;
 
+	def writeMetaData(s, md: MetaData):
+		imap = RpcValue(md, Type.IMap)
+		if len(imap):
+			s.append(TypeInfo.MetaIMap)
+			s.writeData_IMap(imap.value);
+
 #	def readTypeInfo(s) -> (TypeInfo, RpcValue, int):
 #		t: int = s.get()
 #		meta = None
@@ -449,13 +331,6 @@ class Blob(bytearray):
 #			return TypeInfo.UInt, meta, t - 64;
 #		else: return t, meta
 
-	def readData_Array(s, item_type_info):
-		#item_type = typeInfoToType(item_type_info)
-		ret = RpcValue([], Type.Array)
-		size: int = s.read_UIntData()
-		for i in range(size):
-			ret.value.append(readData(item_type_info, False))
-
 	def readData(s, t: TypeInfo, is_array: bool) -> RpcValue:
 		if(is_array):
 			val: list = s.readData_Array(t);
@@ -464,7 +339,7 @@ class Blob(bytearray):
 			if   t == TypeInfo.Null:     return RpcValue(None)
 			elif t == TypeInfo.UInt:     return RpcValue(s.read_UIntData())
 			elif t == TypeInfo.Int:      return RpcValue(s.read_IntData())
-			elif t == TypeInfo.Double:   return RpcValue(s.read_Double())
+			elif t == TypeInfo.Double:   return RpcValue(s.read_fmt(s.DOUBLE_FMT))
 			elif t == TypeInfo.TRUE:     return RpcValue(True)
 			elif t == TypeInfo.FALSE:    return RpcValue(False)
 			elif t == TypeInfo.DateTime: return RpcValue(s.read_DateTime())
@@ -475,6 +350,109 @@ class Blob(bytearray):
 			elif t == TypeInfo.IMap:     return RpcValue(s.readData_IMap(), TypeInfo.IMap)
 			elif t == TypeInfo.Bool:     return RpcValue(s.get() != b'\0')
 			else: raise	ChainpackTypeException("Internal error: attempt to read meta type directly. type: " + str(t) + " " + t.name)
+
+	def writeData(s, val: RpcValue):
+		v = val.value
+		t = val.type # type: Type
+		if   t == Type.Null:    return
+		elif t == Type.Bool:     s.append([b'0', b'1'][v])
+		elif t == Type.UInt:     s.write_UIntData(v)
+		elif t == Type.Int:      s.write_fmt(s.INT_FMT, v)
+		elif t == Type.Double:   s.write_fmt(s.DOUBLE_FMT, v)
+		elif t == Type.DateTime: s.write_DateTime(v)
+		elif t == Type.String:   s.write_String(v)
+		elif t == Type.Blob:     s.write_Blob(v)
+		elif t == Type.List:     s.writeData_List(v)
+		elif t == Type.Array:    s.writeData_List(v)
+		elif t == Type.Map:      s.writeData_Map(v)
+		elif t == Type.IMap:     s.writeData_IMap(v)
+		elif t == Type.INVALID:  raise ChainpackTypeException("Internal error: attempt to write invalid type data")
+		elif t == Type.MetaIMap:	raise ChainpackTypeException("Internal error: attempt to write metatype directly")
+
+	def read_fmt(s, fmt):
+		size = struct.calcsize(fmt)
+		r = struct.unpack(fmt, s[:8])
+		s.pop_front(size)
+		return r
+
+	def write_fmt(s, fmt, value):
+		print(type(value))
+		s.add(struct.pack(fmt, value))
+
+	def writeData_List(s, v: list):
+		for i in v:
+			s.writeData(i)
+		s.append(TypeInfo.TERM)
+
+	def readData_List(s) -> list:
+		r = []
+		while True:
+			i = s.read()
+			if i == TypeInfo.TERM:
+				break
+			r.append(i)
+		return r
+
+	def write_Blob(s, b):
+		assert type(b) in (bytearray, bytes)
+		s.write_UIntData(len(b))
+		for i in b:
+			s.append(i)
+
+	def read_Blob(s):
+		r = bytearray()
+		for i in range(s.read_UIntData()):
+			r.append(s.read_UIntData())
+		return r
+
+	def write_String(s, v):
+		b = v.encode('utf-8')
+		s.write_Blob(b)
+
+	def read_String(s):
+		return s.read_Blob().decode('utf-8')
+
+	def write_DateTime(s, v):
+		s.write_IntData(floor(v.timestamp()*1000))
+
+	def read_DateTime(s):
+		datetime.utcfromtimestamp(s.read_IntData() / 1000)
+
+	def readData_IMap(s) -> RpcValue:
+		ret = RpcValue({}, Type.IMap)
+		#map_size: int = s.read_UIntData()
+		#for i in range(map_size):
+		while True:
+			if s.peek() == TypeInfo.TERM:
+				break
+			key = s.read_UIntData()
+			ret.value[key] = s.read()
+		return ret
+
+	def writeData_IMap(s, map: dict) -> None:
+		assert type(map) == dict
+		for k, v in map.items():
+			if k.type != Type.UInt:
+				raise ChainpackTypeException('k.type != Type.UInt')
+			s.write(k)
+			s.write(v)
+		s.append(TypeInfo.TERM)
+
+	def readData_Map(s) -> RpcValue:
+		ret = RpcValue({}, Type.Map)
+		while True:
+			if s.peek() == TypeInfo.TERM:
+				break
+			key = s.read()
+			ret.value[key] = s.read()
+		return ret
+
+	def writeData_Map(s, map: dict) -> None:
+		assert type(map) == dict
+		for k, v in map.items():
+			s.write_Blob(k)
+			s.write(v)
+		s.append(TypeInfo.TERM)
 
 	"""/* UInt
 	   0 ... 127              |0|x|x|x|x|x|x|x|<-- LSB
@@ -540,3 +518,12 @@ class Blob(bytearray):
 			out[-1] |= prefix;
 		out.reverse()
 		s.add(out)
+
+
+	def readData_Array(s, item_type_info):
+		#item_type = typeInfoToType(item_type_info)
+		ret = RpcValue([], Type.Array)
+		size: int = s.read_UIntData()
+		for i in range(size):
+			ret.value.append(readData(item_type_info, False))
+
