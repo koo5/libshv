@@ -526,7 +526,6 @@ class Blob(bytearray):
 				break
 		if(len(out) >= UINT_BYTES_MAX):
 			raise Exception("write_UIntData: value too big to pack!");
-		out.append(0)
 		msb = out[-1];
 		byte_cnt = len(out)
 		if (((byte_cnt == 1) and (msb >= 128))
@@ -607,7 +606,6 @@ class Blob(bytearray):
 				break
 		if (len(out) > INT_BYTES_MAX) or ((len(out) == INT_BYTES_MAX) and (r & 128)):
 			raise Exception("write_IntData: value too big to pack!");
-		out.append(0)
 		msb = out[-1];
 		byte_cnt = len(out)
 		if (((byte_cnt == 1) and (msb >= 64))
