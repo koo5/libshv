@@ -519,6 +519,87 @@ class Blob(bytearray):
 		out.reverse()
 		s.add(out)
 
+	"""
+/*
+   0 ... 63              |s|0|x|x|x|x|x|x|<-- LSB
+  64 ... 2^13-1          |s|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+2^13 ... 2^20-1          |s|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+                         |s|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+                          n ==  0 -> 3 bytes
+                          n ==  1 -> 4 bytes
+                          n == 14 -> 18 bytes
+                          n == 15 -> for future (number of bytes will be specified in next byte)
+*/
+	"""
+
+	INT_MASK_CNT = 3;
+
+	def read_IntData(s):
+		n = 0;
+		masks = (63, 31, 15);
+		if (not len(s)):
+			raise ChainpackDeserializationException("read_Int: unexpected end of stream!");
+		head:int = s.get();
+		sign :bool = head & 128;
+
+		if  (head & 64) == 0: l = 1
+		elif(head & 32) == 0: l = 2
+		elif(head & 16) == 0: l = 3
+		elif(head & 16) == 0: l = 4
+		else: l = (head & 15) + s.INT_MASK_CNT + 1;
+
+		if(len < 4):
+			l-=1
+			n = head & masks[l];
+		else:
+			l-=1
+
+		for i in range(l):
+			if (not len(s)):
+				raise ChainpackDeserializationException("read_Int: unexpected end of stream!");
+			r = s.get();
+			n = (n << 8) + r;
+
+		if(sign):
+			n = -n;
+		return n;
+
+
+	def write_IntData(s, n):
+		INT_BYTES_MAX = 18;
+		prefixes = (0 << 3, 8 << 3, 12 << 3)
+	#if(n == std::numeric_limits<T>::min()) {
+	#	std::cerr << "cannot pack MIN_INT, will be packed as MIN_INT+1\n";
+	#	n++;
+		out = bytearray()
+		sign = (n < 0);
+		if(sign):
+			n = -n;
+		while True:
+			r = n & 255;
+			n = n >> 8;
+			out.append(r)
+			if not n:
+				break
+		if (len(out) > INT_BYTES_MAX) or ((len(out) == INT_BYTES_MAX) and (r & 128)):
+			raise Exception("write_IntData: value too big to pack!");
+		out.append(0)
+		msb = out[-1];
+		byte_cnt = len(out)
+		if (((byte_cnt == 1) and (msb >= 64))
+		or ((byte_cnt == 2) and (msb >= 32))
+		or ((byte_cnt == 3) and (msb >= 16))
+		or (byte_cnt > 3)):
+			out.append(0)
+		if(byte_cnt > s.INT_MASK_CNT):
+			out[-1] = 0x70 | (byte_cnt - s.INT_MASK_CNT - 1);
+		else:
+			out[-1] |= prefixes[byte_cnt-1];
+		if(sign):
+			bytes[-1] |= 128;
+		out.reverse()
+		s.add(out)
+
 
 	def readData_Array(s, item_type_info):
 		#item_type = typeInfoToType(item_type_info)
