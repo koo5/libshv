@@ -137,72 +137,77 @@ def chainpackTypeFromPythonType(t):
 class RpcValue():
 	def __init__(s, value, t = None):
 		if type(value) == RpcValue:
-			s.m_value = value.m_value
-			s.m_type = value.m_type
-			s.m_metaData = deepcopy(value.m_metaData)
+			s._value = value._value
+			s._type = value._type
+			s._metaData = deepcopy(value._metaData)
 		else:
-			s.m_metaData = {}
+			s._metaData = {}
 			if type(value) == list:
-				s.m_value = []
+				s._value = []
 				for i in value:
-					s.m_value.append(RpcValue(i))
+					s._value.append(RpcValue(i))
 			elif type(value) == dict:
-				s.m_value = {}
+				s._value = {}
 				for k,v in value.items():
 					if t == Type.IMap:
-						#s.m_value[RpcValue(k, Type.UInt)] = RpcValue(v)
-						s.m_value[k] = RpcValue(v)
+						#s._value[RpcValue(k, Type.UInt)] = RpcValue(v)
+						s._value[k] = RpcValue(v)
 					else:
-						s.m_value[RpcValue(k)] = RpcValue(v)
+						s._value[k] = RpcValue(v)
 			else:
-				s.m_value = value
+				s._value = value
 
 			if t == None:
 				t = chainpackTypeFromPythonType(type(value))[0]
-			s.m_type = t
-		if s.m_type not in chainpackTypeFromPythonType(type(s.m_value)):
-			raise ChainpackTypeException("python type %s for value %s does not match chainpack type %s"%(type(s.m_value), s.m_value, s.m_type))
+			s._type = t
+		if s._type not in chainpackTypeFromPythonType(type(s._value)):
+			raise ChainpackTypeException("python type %s for value %s does not match chainpack type %s" % (type(s._value), s._value, s._type))
 
 	def __eq__(s, x):
-		return s.type == x.type and s.value == x.value and s.m_metaData == x.m_metaData
+		return s.type == x.type and s.value == x.value and s._metaData == x._metaData
+
+	def assertEquals(s, x):
+		assert s.type == x.type
+		assert s.value == x.value
+		assert s._metaData == x._metaData
 
 	def __str__(s):
 		out = ""
-		if len(s.m_metaData):
-			out += '<' + str(s.m_metaData) + '>'
+		if len(s._metaData):
+			out += '<' + str(s._metaData) + '>'
 		#out += RpcValue::typeToName(type());
 		#	out += '(' + s + ')';
 		#	break;
-		return out + str(s.m_value)
+		return out + str(s._value)
 
 	def __len__(s):
-		return len(s.m_value)
+		return len(s._value)
 
 	@property
 	def value(s):
-		return s.m_value
+		return s._value
 
 	@property
 	def type(s):
-		return s.m_type
+		return s._type
 
 	def isValid(s):
-		return s.m_type != Type.INVALID
+		return s._type != Type.INVALID
 
 	def toInt(s) -> int:
-		assert s.m_type in [Type.Int, Type.UInt]
-		return s.m_value
+		assert s._type in [Type.Int, Type.UInt]
+		return s._value
 
 	def toBool(s) -> bool:
-		assert s.m_type in [Type.Bool]
-		return s.m_value
+		assert s._type in [Type.Bool]
+		return s._value
 
 	def setMetaValue(s, tag, value):
 		value = RpcValue(value)
 		if tag in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
-			if value.m_type == TypeInfo.Int:
-				value = RpcValue(value.m_value, Type.UInt)
-		s.m_metaData[tag] = value
+			if value._type == TypeInfo.Int:
+				value = RpcValue(value._value, Type.UInt)
+		s._metaData[tag] = value
 
 
 def optimizedMetaTagType(tag: Tag) -> TypeInfo:
@@ -213,7 +218,7 @@ def optimizedMetaTagType(tag: Tag) -> TypeInfo:
 def optimizeRpcValueIntoType(pack: RpcValue) -> int:
 		if (not pack.isValid()):
 			raise ChainpackTypeException("Cannot serialize invalid ChainPack.");
-		t = pack.m_type# type: Type
+		t = pack._type# type: Type
 		if(t == Type.Bool) :
 			return [TypeInfo.FALSE, TypeInfo.TRUE][pack.toBool()]
 		elif t == Type.UInt:
@@ -284,17 +289,17 @@ class Blob(bytearray):
 	@classmethod
 	def pack(cls, value):
 		print("pack:", RpcValue(value))
-		assert(value.m_type != TypeInfo.INVALID)
+		assert(value._type != TypeInfo.INVALID)
 		out = Blob()
-		out.writeMetaData(value.m_metaData);
+		out.writeMetaData(value._metaData);
 		t = optimizeRpcValueIntoType(value)
 		if t != None:
 			out.append(t)
 		else:
-			if(value.m_type == Type.Array):
+			if(value._type == Type.Array):
 				t = typeToTypeInfo(pack.arrayType) | ARRAY_FLAG_MASK
 			else:
-				t = typeToTypeInfo(value.m_type)
+				t = typeToTypeInfo(value._type)
 			out.append(t)
 			out.writeData(value)
 		return out
@@ -451,9 +456,9 @@ class Blob(bytearray):
 	def writeData_IMap(s, map: dict) -> None:
 		assert type(map) == dict
 		for k, v in map.items():
-			if k.type != Type.UInt:
+			if type(k) != int or k < 0:
 				raise ChainpackTypeException('k.type != Type.UInt')
-			s.write(k)
+			s.write_UIntData(k)
 			s.write(v)
 		s.append(TypeInfo.TERM)
 

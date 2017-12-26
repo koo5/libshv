@@ -62,7 +62,7 @@ def testIMap2():
 	l: int = out.write(cp1)
 	cp2: RpcValue = out.read()
 	print(cp1," " ,cp2," len: " ,l ," dump: " ,out);
-	assert cp1 == cp2
+	cp1.assertEquals(cp2)
 	assert cp1.type == cp2.type
 	assert cp1.toIMap() == cp2.toIMap()
 
