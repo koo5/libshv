@@ -11,13 +11,20 @@ from math import floor
 debug = logging.debug
 ARRAY_FLAG_MASK = 64
 
-class ChainpackTypeException(Exception):
+
+class ChainpackException(Exception):
 	pass
-class ChainpackDeserializationException(Exception):
+
+class ChainpackTypeException(ChainpackException):
 	pass
+
+class ChainpackDeserializationException(ChainpackException):
+	pass
+
 
 class MetaData(dict):
 	pass
+
 
 class TypeInfo(enum.IntFlag):
 	INVALID = -1
@@ -74,6 +81,14 @@ class Type(enum.IntFlag):
 	MetaIMap=146
 
 
+class Tag(enum.IntEnum):
+	Invalid = 0
+	MetaTypeId = 1
+	MetaTypeNameSpaceId = 2
+	MetaTypeName = 3
+	MetaTypeNameSpaceName = 4
+	USER = 8
+
 
 def typeToTypeInfo(type: Type):
 	if type == Type.INVALID:  raise Exception("There is no type info for type Invalid");
@@ -118,14 +133,6 @@ def chainpackTypeFromPythonType(t):
 	if t == dict:        return Type.Map, Type.IMap
 	raise ChainpackTypeException("failed deducing chainpack type for python type %s"%t)
 
-class Tag(enum.IntEnum):
-	Invalid = 0
-	MetaTypeId = 1
-	MetaTypeNameSpaceId = 2
-	MetaTypeName = 3
-	MetaTypeNameSpaceName = 4
-	USER = 8
-
 
 class RpcValue():
 	def __init__(s, value, t = None):
@@ -143,7 +150,8 @@ class RpcValue():
 				s.m_value = {}
 				for k,v in value.items():
 					if t == Type.IMap:
-						s.m_value[RpcValue(k, Type.UInt)] = RpcValue(v)
+						#s.m_value[RpcValue(k, Type.UInt)] = RpcValue(v)
+						s.m_value[k] = RpcValue(v)
 					else:
 						s.m_value[RpcValue(k)] = RpcValue(v)
 			else:
@@ -155,12 +163,9 @@ class RpcValue():
 		if s.m_type not in chainpackTypeFromPythonType(type(s.m_value)):
 			raise ChainpackTypeException("python type %s for value %s does not match chainpack type %s"%(type(s.m_value), s.m_value, s.m_type))
 
-	@property
-	def value(s):
-		return s.m_value
-	@property
-	def type(s):
-		return s.m_type
+	def __eq__(s, x):
+		return s.type == x.type and s.value == x.value and s.m_metaData == x.m_metaData
+
 	def __str__(s):
 		out = ""
 		if len(s.m_metaData):
@@ -169,22 +174,36 @@ class RpcValue():
 		#	out += '(' + s + ')';
 		#	break;
 		return out + str(s.m_value)
+
 	def __len__(s):
 		return len(s.m_value)
+
+	@property
+	def value(s):
+		return s.m_value
+
+	@property
+	def type(s):
+		return s.m_type
+
+	def isValid(s):
+		return s.m_type != Type.INVALID
+
+	def toInt(s) -> int:
+		assert s.m_type in [Type.Int, Type.UInt]
+		return s.m_value
+
+	def toBool(s) -> bool:
+		assert s.m_type in [Type.Bool]
+		return s.m_value
+
 	def setMetaValue(s, tag, value):
 		value = RpcValue(value)
 		if tag in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
 			if value.m_type == TypeInfo.Int:
 				value = RpcValue(value.m_value, Type.UInt)
 		s.m_metaData[tag] = value
-	def isValid(s):
-		return s.m_type != Type.INVALID
-	def toInt(s) -> int:
-		assert s.m_type in [Type.Int, Type.UInt]
-		return s.m_value
-	def toBool(s) -> bool:
-		assert s.m_type in [Type.Bool]
-		return s.m_value
+
 
 def optimizedMetaTagType(tag: Tag) -> TypeInfo:
 	if tag == Tag.MetaTypeId: return TypeInfo.META_TYPE_ID;
