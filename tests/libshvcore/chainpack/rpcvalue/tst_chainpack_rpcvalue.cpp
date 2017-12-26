@@ -504,8 +504,8 @@ private:
 			qDebug() << "------------- IMap";
 			{
 				RpcValue::IMap map {
-					{1, "foo"},
-					{2, "bar"},
+					{128, "foo"},
+					{129, "bar"},
 					{333, 15u},
 				};
 				RpcValue cp1{map};

@@ -12,10 +12,9 @@ from value import *
 
 def test1():
 	print("============= chainpack binary test ============")
-	assert TypeInfo.Null_Array.value == 198
 
 def test2():
-	for t in range(TypeInfo.TERM, TypeInfo.TRUE+1):
+	for t in range(TypeInfo.TERMINATION, TypeInfo.TRUE+1):
 		print(t, Blob(t), TypeInfo(t))
 
 def test3():
@@ -38,7 +37,20 @@ def testTinyUint():
 		assert cp1.type == cp2.type
 		assert cp1.value == cp2.value
 
-#"------------- uint"
+def testUint():
+	print("------------- uint")
+	n_max = (1<<18*8)-1
+	n = 3
+	while n < (n_max/3 - 1):
+		cp1 = RpcValue(n, Type.UInt);
+		out = Blob()
+		l = out.write(cp1)
+		print(n, " ", cp1, " len: ", l, " dump: ", out)
+		cp2 = out.read()
+		cp1.assertEquals(cp2)
+		print(n, " ", cp1, " " ,cp2, " len: " ,l)# ," dump: " ,binary_dump(out.str()).c_str();
+		assert(cp1.toInt() == cp2.toInt());
+		n *= 3
 
 def testIMap():
 	print("------------- IMap")
@@ -49,9 +61,10 @@ def testIMap():
 	cp1 = RpcValue(map)
 	out = Blob()
 	len = out.write(cp1)
+	out2 = Blob(out)
 	cp2 = out.read()
-	print(cp1, cp2, " len: ", len, " dump: ", out)
-	assert cp1, cp2
+	print(cp1, cp2, " len: ", len, " dump: ", out2)
+	assert cp1 == cp2
 
 def testIMap2():
 	cp1 = RpcValue(dict([
@@ -60,11 +73,10 @@ def testIMap2():
 		(129, 3)]), Type.IMap)
 	out = Blob()
 	l: int = out.write(cp1)
+	out2 = Blob(out)
 	cp2: RpcValue = out.read()
-	print(cp1," " ,cp2," len: " ,l ," dump: " ,out);
+	print(cp1 ,cp2," len: " ,l ," dump: " ,out2);
 	cp1.assertEquals(cp2)
-	assert cp1.type == cp2.type
-	assert cp1.toIMap() == cp2.toIMap()
 
 def testMeta():
 	print("------------- Meta")
@@ -74,15 +86,15 @@ def testMeta():
 	cp1.setMetaValue(Tag.USER, "foo")
 	cp1.setMetaValue(Tag.USER+1, RpcValue([1,2,3]))
 	out = Blob()
-	len = out.write(cp1)
+	l = out.write(cp1)
 	orig_len = len(out)
 	orig_out = out
 	cp2 = out.read();
 	consumed = orig_len - len(out)
-	print(cp1, cp2, " len: ", len, " consumed: ", consumed , " dump: " , orig_out)
-	assert len == consumed
-	assert cp1.type() == cp2.type()
-	assert cp1.metaData() == cp2.metaData()
+	print(cp1, cp2, " len: ", l, " consumed: ", consumed , " dump: " , orig_out)
+	assert l == consumed
+	cp1.assertEquals(cp2)
+
 
 def encode(x):
 	return Blob(x)
@@ -101,7 +113,7 @@ def test_decode_inverts_encode(s):
 @given(dictionaries(integers(1), json), json)
 def test_decode_inverts_encode2(md, s):
 	s = RpcValue(s)
-	for k,v in md:
+	for k,v in md.items():
 		if k in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
 			if (type(v) != int) or (v < 0):
 				should_fail = True

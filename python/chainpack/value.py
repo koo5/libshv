@@ -28,26 +28,19 @@ class MetaData(dict):
 
 class TypeInfo(enum.IntFlag):
 	INVALID = -1
-	#/// auxiliary types used for optimization
-	TERM = 128 #// first byte of packed Int or UInt cannot be like 0b1000000
-	META_TYPE_ID=129
-	META_TYPE_NAMESPACE_ID=130
-	FALSE=131
-	TRUE=132
-	CHUNK_HEADER=133
 	#/// types
-	Null=134
-	UInt=135
-	Int=136
-	Double=137
-	Bool=138
-	Blob=139
-	String=140
-	DateTime=141
-	List=142
-	Map=143
-	IMap=144
-	MetaIMap=145
+	Null=128
+	UInt=129
+	Int=130
+	Double=131
+	Bool=132
+	Blob=133
+	String=134
+	DateTime=135
+	List=136
+	Map=137
+	IMap=138
+	MetaIMap=139
 	#/// arrays
 	#// if bit 6 is set, then packed value is an Array of corresponding values
 	Null_Array = Null | ARRAY_FLAG_MASK
@@ -62,7 +55,10 @@ class TypeInfo(enum.IntFlag):
 	Map_Array = Map | ARRAY_FLAG_MASK
 	IMap_Array = IMap | ARRAY_FLAG_MASK
 	MetaIMap_Array = MetaIMap | ARRAY_FLAG_MASK
-
+	#/// auxiliary types used for optimization
+	FALSE=253
+	TRUE=254
+	TERMINATION = 255
 
 class Type(enum.IntFlag):
 	INVALID = -1
@@ -276,7 +272,7 @@ class Blob(bytearray):
 			type = t & ~ARRAY_FLAG_MASK;
 			ret = s.readData(type, is_array);
 		if len(metadata):
-			ret.setMetaData(metadata.deepcopy())
+			ret._metaData = metadata
 		return ret;
 
 	def write(s, value: RpcValue) -> int:
@@ -288,7 +284,7 @@ class Blob(bytearray):
 
 	@classmethod
 	def pack(cls, value):
-		print("pack:", RpcValue(value))
+		#print("pack:", RpcValue(value))
 		assert(value._type != TypeInfo.INVALID)
 		out = Blob()
 		out.writeMetaData(value._metaData);
@@ -323,15 +319,7 @@ class Blob(bytearray):
 		ret = MetaData()
 		while True:
 			type_info: int = s.peek();
-			if type_info == TypeInfo.META_TYPE_ID:
-				s.pop(0)
-				u: int = s.read_UIntData();
-				ret[Tag.MetaTypeId] = u
-			elif type_info == TypeInfo.META_TYPE_NAMESPACE_ID:
-				s.pop(0)
-				u = s.read_UIntData();
-				ret[Tag.MetaTypeNameSpaceId] = u
-			elif type_info == TypeInfo.MetaIMap:
+			if type_info == TypeInfo.MetaIMap:
 				s.pop(0)
 				for k,v in s.readData_IMap().value.items():
 					ret[k] = v
@@ -361,7 +349,7 @@ class Blob(bytearray):
 			return RpcValue(val);
 		else:
 			if   t == TypeInfo.Null:     return RpcValue(None)
-			elif t == TypeInfo.UInt:     return RpcValue(s.read_UIntData())
+			elif t == TypeInfo.UInt:     return RpcValue(s.read_UIntData(), Type.UInt)
 			elif t == TypeInfo.Int:      return RpcValue(s.read_IntData())
 			elif t == TypeInfo.Double:   return RpcValue(s.read_fmt(s.DOUBLE_FMT))
 			elif t == TypeInfo.TRUE:     return RpcValue(True)
@@ -405,16 +393,17 @@ class Blob(bytearray):
 
 	def writeData_List(s, v: list):
 		for i in v:
-			s.writeData(i)
-		s.append(TypeInfo.TERM)
+			s.write(i)
+		s.append(TypeInfo.TERMINATION)
 
 	def readData_List(s) -> list:
 		r = []
 		while True:
-			i = s.read()
-			if i == TypeInfo.TERM:
+			i = s.peek()
+			if i == TypeInfo.TERMINATION:
+				s.pop(0)
 				break
-			r.append(i)
+			r.append(s.read())
 		return r
 
 	def write_Blob(s, b):
@@ -447,7 +436,8 @@ class Blob(bytearray):
 		#map_size: int = s.read_UIntData()
 		#for i in range(map_size):
 		while True:
-			if s.peek() == TypeInfo.TERM:
+			if s.peek() == TypeInfo.TERMINATION:
+				s.pop(0)
 				break
 			key = s.read_UIntData()
 			ret.value[key] = s.read()
@@ -456,16 +446,16 @@ class Blob(bytearray):
 	def writeData_IMap(s, map: dict) -> None:
 		assert type(map) == dict
 		for k, v in map.items():
-			if type(k) != int or k < 0:
+			if not isinstance(k, int) or k < 0:
 				raise ChainpackTypeException('k.type != Type.UInt')
 			s.write_UIntData(k)
 			s.write(v)
-		s.append(TypeInfo.TERM)
+		s.append(TypeInfo.TERMINATION)
 
 	def readData_Map(s) -> RpcValue:
 		ret = RpcValue({}, Type.Map)
 		while True:
-			if s.peek() == TypeInfo.TERM:
+			if s.peek() == TypeInfo.TERMINATION:
 				break
 			key = s.read()
 			ret.value[key] = s.read()
@@ -474,9 +464,9 @@ class Blob(bytearray):
 	def writeData_Map(s, map: dict) -> None:
 		assert type(map) == dict
 		for k, v in map.items():
-			s.write_Blob(k)
+			s.write(k)
 			s.write(v)
-		s.append(TypeInfo.TERM)
+		s.append(TypeInfo.TERMINATION)
 
 	"""/* UInt
 	   0 ... 127              |0|x|x|x|x|x|x|x|<-- LSB
@@ -504,7 +494,7 @@ class Blob(bytearray):
 		elif(head & 16) == 0: l = 4
 		else: l = (head & 15) + s.UINT_MASK_CNT + 1;
 		l-=1;
-		if(l < 5):
+		if(l < 4):
 			n = head & masks[l];
 
 		for i in range(l):
@@ -571,7 +561,7 @@ class Blob(bytearray):
 		elif(head & 16) == 0: l = 4
 		else: l = (head & 15) + s.INT_MASK_CNT + 1;
 
-		if(len < 4):
+		if(l < 4):
 			l-=1
 			n = head & masks[l];
 		else:
