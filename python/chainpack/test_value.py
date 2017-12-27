@@ -5,6 +5,7 @@ try:
 	import better_exceptions
 except:
 	pass
+import hypothesis
 from hypothesis import given
 from hypothesis.strategies import *
 
@@ -97,32 +98,39 @@ def testMeta():
 
 
 def encode(x):
-	return Blob(x)
+	r = Blob(x)
+	print("encoded:",r)
+	return r
 
 def decode(blob):
-	return blob.read()
+	v = blob.read()
+	print("decoded:",v)
+	return v
 
-json = recursive(none() | booleans() | floats() | integers() | text(),
+json = recursive(none() | booleans() | floats(allow_nan=False, allow_infinity=False) | integers() | text(),
 lambda children: lists(children) | dictionaries(text(), children))
 
-@given(json)
-def test_decode_inverts_encode(s):
-	s = RpcValue(s)
-	assert decode(encode(s)) == s
+with hypothesis.settings( use_coverage=False, verbosity=hypothesis.Verbosity.verbose):
 
-@given(dictionaries(integers(1), json), json)
-def test_decode_inverts_encode2(md, s):
-	s = RpcValue(s)
-	for k,v in md.items():
-		if k in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
-			if (type(v) != int) or (v < 0):
-				should_fail = True
-		s.setMetaValue(k, v)
-	try:
+	@given(json)
+	def test_decode_inverts_encode(s):
+		s = RpcValue(s)
 		assert decode(encode(s)) == s
-	except ChainpackException as e:
-		if not should_fail:
-			raise
 
+	@given(dictionaries(integers(1), json), json)
+	def test_decode_inverts_encode2(md, s):
+		s = RpcValue(s)
+		for k,v in md.items():
+			if k in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
+				if (type(v) != int) or (v < 0):
+					should_fail = True
+			s.setMetaValue(k, v)
+		try:
+			assert decode(encode(s)) == s
+		except ChainpackException as e:
+			if not should_fail:
+				raise
+
+	test_decode_inverts_encode()
 
 

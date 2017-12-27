@@ -167,14 +167,14 @@ class RpcValue():
 		assert s.value == x.value
 		assert s._metaData == x._metaData
 
-	def __str__(s):
-		out = ""
+	def __repr__(s):
+		out = "RpcValue("
 		if len(s._metaData):
 			out += '<' + str(s._metaData) + '>'
 		#out += RpcValue::typeToName(type());
 		#	out += '(' + s + ')';
 		#	break;
-		return out + str(s._value)
+		return out + str(s._value) + ")"
 
 	def __len__(s):
 		return len(s._value)
@@ -225,6 +225,8 @@ def optimizeRpcValueIntoType(pack: RpcValue) -> int:
 			n = pack.toInt()
 			if n in range(64):
 				return n + 64
+		elif t == Type.Null:
+			return TypeInfo.Null
 		return None
 
 class Blob(bytearray):
@@ -366,7 +368,7 @@ class Blob(bytearray):
 	def writeData(s, val: RpcValue):
 		v = val.value
 		t = val.type # type: Type
-		if   t == Type.Null:    return
+		if   t == Type.Null:     return
 		elif t == Type.Bool:     s.append([b'0', b'1'][v])
 		elif t == Type.UInt:     s.write_UIntData(v)
 		elif t == Type.Int:      s.write_IntData(v)
@@ -379,11 +381,11 @@ class Blob(bytearray):
 		elif t == Type.Map:      s.writeData_Map(v)
 		elif t == Type.IMap:     s.writeData_IMap(v)
 		elif t == Type.INVALID:  raise ChainpackTypeException("Internal error: attempt to write invalid type data")
-		elif t == Type.MetaIMap:	raise ChainpackTypeException("Internal error: attempt to write metatype directly")
+		elif t == Type.MetaIMap: raise ChainpackTypeException("Internal error: attempt to write metatype directly")
 
 	def read_fmt(s, fmt):
 		size = struct.calcsize(fmt)
-		r = struct.unpack(fmt, s[:8])
+		r = struct.unpack(fmt, s[:8])[0]
 		s.pop_front(size)
 		return r
 
@@ -410,7 +412,7 @@ class Blob(bytearray):
 		assert type(b) in (bytearray, bytes)
 		s.write_UIntData(len(b))
 		for i in b:
-			s.append(i)
+			s.write_UIntData(i)
 
 	def read_Blob(s):
 		r = bytearray()
@@ -456,15 +458,16 @@ class Blob(bytearray):
 		ret = RpcValue({}, Type.Map)
 		while True:
 			if s.peek() == TypeInfo.TERMINATION:
+				s.pop(0)
 				break
 			key = s.read()
-			ret.value[key] = s.read()
+			ret.value[key.value] = s.read()
 		return ret
 
 	def writeData_Map(s, map: dict) -> None:
 		assert type(map) == dict
 		for k, v in map.items():
-			s.write(k)
+			s.write(RpcValue(k))
 			s.write(v)
 		s.append(TypeInfo.TERMINATION)
 
@@ -603,12 +606,13 @@ class Blob(bytearray):
 		or ((byte_cnt == 3) and (msb >= 16))
 		or (byte_cnt > 3)):
 			out.append(0)
+		byte_cnt = len(out)
 		if(byte_cnt > s.INT_MASK_CNT):
 			out[-1] = 0x70 | (byte_cnt - s.INT_MASK_CNT - 1);
 		else:
 			out[-1] |= prefixes[byte_cnt-1];
 		if(sign):
-			bytes[-1] |= 128;
+			out[-1] |= 128;
 		out.reverse()
 		s.add(out)
 
