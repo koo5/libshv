@@ -110,14 +110,14 @@ def decode(blob):
 json = recursive(none() | booleans() | floats(allow_nan=False, allow_infinity=False) | integers() | text(),
 lambda children: lists(children) | dictionaries(text(), children))
 
-with hypothesis.settings( use_coverage=False, verbosity=hypothesis.Verbosity.verbose):
+with hypothesis.settings(verbosity=hypothesis.Verbosity.verbose):
 
 	@given(json)
 	def test_decode_inverts_encode(s):
 		s = RpcValue(s)
 		assert decode(encode(s)) == s
 
-	@given(dictionaries(integers(1), json), json)
+	@given(dictionaries(integers(min_value=1), json), json)
 	def test_decode_inverts_encode2(md, s):
 		s = RpcValue(s)
 		for k,v in md.items():

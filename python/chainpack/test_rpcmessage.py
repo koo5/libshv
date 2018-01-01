@@ -12,11 +12,13 @@ def testRpcRequest():
 		print("============= chainpack rpcmessage test ============\n")
 		print("------------- RpcRequest")
 		rq = RpcRequest()
-		(rq.setId(123)
-				.setMethod("foo")
-				.setParams({"a": 45,
-				            "b": "bar",
-							"c": RpcValue([1,2,3])}))
+		rq.setId(123)
+		rq.setMethod("foo")
+		rq.setParams({"a": 45,
+		            "b": "bar",
+					"c": RpcValue([1,2,3])})
+		rq.setMetaValue(RpcMessage.Tag.DeviceId, "aus/mel/pres/A");
+
 		cp1 = rq.value
 		out = Blob()
 		len = rq.write(out);

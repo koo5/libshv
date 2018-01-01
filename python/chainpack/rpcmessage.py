@@ -1,8 +1,10 @@
 import enum
-
+import meta
 from value import *
 
 uint = int
+
+
 
 class RpcMessage():
 	class Key(enum.IntFlag):
@@ -15,13 +17,26 @@ class RpcMessage():
 		ErrorMessage,
 		MAX_KEY
 
+	class Tag(enum.IntFlag):
+		RequestId = meta.Tag.USER,
+		RpcCallType,
+		DeviceId,
+		MAX
+
+	class RpcCallType(enum.IntFlag):
+		Undefined = 0,
+		Request,
+		Response,
+		Notify
+
+
 	def __init__(self, val: RpcValue) -> None:
 		assert(val.isIMap());
 		s._value: RpcValue = val;
 
-#	def hasKey(s, key: Key) -> bool:
-#		assert(m_value.type == Type.IMap)
-#		return key in m_value
+	def hasKey(s, key: Key) -> bool:
+		assert(s.m_value.type == Type.IMap)
+		return key in s.m_value
 
 #	def value(self, uint: Key) -> RpcValue:
 #		return __getitem__(key)
@@ -38,33 +53,48 @@ class RpcMessage():
 		ensureMetaRpcValues();
 		m_value[key] = val
 
-
 	def id(s) -> uint:
 		return s.__getitem__(Key.Id).toUInt();
 
 	def setId(s, uint: id) -> None:
-		s.__setitem__(Key::Id, RpcValue(id));
+		s.__setitem__(Key.Id, RpcValue(id));
 
 	def isRequest(s) -> bool:
 		return s.hasKey(Key.Method);
 
-# bool RpcMessage::isNotify() const
-# {
-# 	return isRequest() && !hasKey(Key::Id);
-# }
-#
-# bool RpcMessage::isResponse() const
-# {
-# 	return hasKey(Key::Id) && (hasKey(Key::Result) || hasKey(Key::Error));
-# }
+	def isNotify(s) -> bool:
+		return s.isRequest() and not s.hasKey(Key.Id);
+
+	def isResponse(s) -> bool:
+		return s.hasKey(Key.Id) and (hasKey(Key.Result) or hasKey(Key.Error));
+
+	def write(out: Blob) -> int:
+		assert(s.m_value.isValid());
+		assert(rpcType() != meta.RpcMessage.RpcCallType.Undefined);
+		return Blob.write(out, s.m_value);
+
+	def rpcType(s) -> meta.RpcMessage.RpcCallType.Enum:
+		rpc_id: int = s.id();
+		has_method: bool = s.hasKey(meta.RpcMessage.Key::Method);
+		if(has_method)
+			if rpc_id > 0:
+				return meta.RpcMessage.RpcCallType.Request
+				return meta.RpcMessage.RpcCallType.Notify;
+		if s.hasKey(meta.RpcMessage.Key.Result) or s.hasKey(meta.RpcMessage.Key.Error):
+			return meta.RpcMessage.RpcCallType.Response;
+		return meta.RpcMessage.RpcCallType.Undefined;
 
 
-	def ensureMetaRpcValues() -> None:
+
+
+
+
+
+
+	def checkMetaValues() -> None:
 		if(!m_value.isValid()):
 			m_value = RpcValue({}, Type.IMap)
-			m_value.setMetaValue(Tag.MetaTypeId, GlobalMetaTypeId.ChainPackRpcMessage);
-			#/// not needed, Global is default name space
-			#//m_value.setMetaValue(RpcValue::Tag::MetaTypeNameSpaceId, MetaTypeNameSpaceId::Global);
+			m_value.setMetaValue(Tag.MetaTypeId, meta.RpcMessage.ID);
 
 	def method() -> str:
 		return value(Key.Method).toString();

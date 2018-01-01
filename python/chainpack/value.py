@@ -200,9 +200,9 @@ class RpcValue():
 
 	def setMetaValue(s, tag, value):
 		value = RpcValue(value)
-		if tag in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
-			if value._type == TypeInfo.Int:
-				value = RpcValue(value._value, Type.UInt)
+		#if tag in [Tag.MetaTypeId, Tag.MetaTypeNameSpaceId]:
+		#	if value._type == Type.Int:
+		#		value = RpcValue(value._value, Type.UInt)
 		s._metaData[tag] = value
 
 
