@@ -118,7 +118,7 @@ T read_IntData(std::istream &data)
 	T n = 0;
 	constexpr uint8_t masks[INT_MASK_CNT] = {63, 31, 15};
 	if(data.eof())
-		SHV_EXCEPTION("read_UInt: unexpected end of stream!");
+		SHV_EXCEPTION("read_Int: unexpected end of stream!");
 	uint8_t head = data.get();
 	bool s = head & 128;
 	int len;
@@ -135,7 +135,7 @@ T read_IntData(std::istream &data)
 	}
 	for (int i = 0; i < len; ++i) {
 		if(data.eof())
-			SHV_EXCEPTION("read_UInt: unexpected end of stream!");
+			SHV_EXCEPTION("read_Int: unexpected end of stream!");
 		uint8_t r = data.get();
 		n = (n << 8) + r;
 	};
