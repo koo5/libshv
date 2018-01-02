@@ -1,5 +1,7 @@
+import enum
+
 class Tag(enum.IntFlag):
 	Invalid = -1,
 	MetaTypeId = 1,
-	MetaTypeNameSpaceId,
-	USER
+	MetaTypeNameSpaceId = 2,
+	USER = 8

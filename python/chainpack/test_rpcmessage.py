@@ -20,7 +20,7 @@ def testRpcRequest():
 		rq.setMetaValue(RpcMessage.Tag.DeviceId, "aus/mel/pres/A");
 
 		cp1 = rq.value
-		out = Blob()
+		out = ChainPackProtocol()
 		len = rq.write(out);
 		RpcValue: cp2 = out.read()
 		print (cp1, " " ,cp2," len: " << len << " dump: " ,out);
@@ -35,7 +35,7 @@ def testRpcResponse():
 		print("------------- RpcResponse")
 		RpcResponse: rs;
 		rs.setId(123).setResult(42);
-		out = Blob()
+		out = ChainPackProtocol()
 		RpcValue: cp1 = rs.value()
 		int: len = out.write(rs)
 		RpcValue: cp2 = out.read()
@@ -51,31 +51,31 @@ def testRpcResponse2():
 	rs = RpcResponse()
 	rs.setId(123)
 	rs.setError(RpcResponse.Error.createError(RpcResponse.Error.InvalidParams, "Paramter length should be greater than zero!"))
-	out = Blob()
-	Value: cp1 = rs.value();
-	int len = rs.write(out);
-	Value: cp2 = ChainPackProtocol::read(out);
-	print(cp1, " ", cp2, " len: ", len, " dump: ", out);
+	out = ChainPackProtocol()
+	cp1: RpcValue = rs.value();
+	l: int = rs.write(out);
+	cp2: Value = out.read()
+	print(cp1, " ", cp2, " len: ", l, " dump: ", out);
 	assert(cp1.type() == cp2.type());
-	RpcResponse rs2(cp2);
+	rs2 = RpcResponse(cp2);
 	assert(rs2.isResponse());
 	assert rs2.id() == rs.id()
 	assert rs2.error() == rs.error()
 
 def testRpcNotify():
-	qDebug() << "------------- RpcNotify";
-	RpcRequest rq;
+	print("------------- RpcNotify")
+	rq = RpcRequest()
 	rq.setMethod("foo").setParams({
 						   "a": 45,
 						   "b": "bar",
-						   "c": Value([1,2,3])});
-	Blob out;
-	Value: cp1 = rq.value();
-	int: len = out.write(rq);
-	Value: cp2 = out.read(read)
-	print(cp1," " ,cp2," len: " ,len ," dump: " ,out);
+						   "c": RpcValue([1,2,3])});
+	out = ChainPackProtocol()
+	cp1: Value = rq.value();
+	l: int = out.write(rq);
+	cp2: Value = out.read()
+	print(cp1," " ,cp2," len: " ,l ," dump: " ,out);
 	assert(cp1.type() == cp2.type());
-	RpcRequest rq2(cp2);
+	rq2 = RpcRequest(cp2);
 	assert(rq2.isNotify());
 	assert rq2.method() == rq.method()
 	assert rq2.params() == rq.params()

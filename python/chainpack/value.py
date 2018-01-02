@@ -11,6 +11,7 @@ from math import floor
 debug = logging.debug
 ARRAY_FLAG_MASK = 64
 
+import meta
 
 class ChainpackException(Exception):
 	pass
@@ -75,16 +76,6 @@ class Type(enum.IntFlag):
 	Map=144
 	IMap=145
 	MetaIMap=146
-
-
-class Tag(enum.IntEnum):
-	Invalid = 0
-	MetaTypeId = 1
-	MetaTypeNameSpaceId = 2
-	MetaTypeName = 3
-	MetaTypeNameSpaceName = 4
-	USER = 8
-
 
 def typeToTypeInfo(type: Type):
 	if type == Type.INVALID:  raise Exception("There is no type info for type Invalid");
@@ -206,9 +197,9 @@ class RpcValue():
 		s._metaData[tag] = value
 
 
-def optimizedMetaTagType(tag: Tag) -> TypeInfo:
-	if tag == Tag.MetaTypeId: return TypeInfo.META_TYPE_ID;
-	if tag == Tag.MetaTypeNameSpaceId: return TypeInfo.META_TYPE_NAMESPACE_ID;
+def optimizedMetaTagType(tag: meta.Tag) -> TypeInfo:
+	if tag == meta.Tag.MetaTypeId: return TypeInfo.META_TYPE_ID;
+	if tag == meta.Tag.MetaTypeNameSpaceId: return TypeInfo.META_TYPE_NAMESPACE_ID;
 	return TypeInfo.INVALID;
 
 def optimizeRpcValueIntoType(pack: RpcValue) -> int:
@@ -229,7 +220,7 @@ def optimizeRpcValueIntoType(pack: RpcValue) -> int:
 			return TypeInfo.Null
 		return None
 
-class Blob(bytearray):
+class ChainPackProtocol(bytearray):
 	DOUBLE_FMT = '!d'
 
 	def __init__(s, value=None):
@@ -280,7 +271,7 @@ class Blob(bytearray):
 	def write(s, value: RpcValue) -> int:
 		if(not value.isValid()):
 			raise ChainpackTypeException("Cannot serialize invalid ChainPack.");
-		x = Blob.pack(value)
+		x = ChainPackProtocol.pack(value)
 		s.add(x)
 		return len(x)
 
@@ -288,14 +279,14 @@ class Blob(bytearray):
 	def pack(cls, value):
 		#print("pack:", RpcValue(value))
 		assert(value._type != TypeInfo.INVALID)
-		out = Blob()
+		out = ChainPackProtocol()
 		out.writeMetaData(value._metaData);
 		t = optimizeRpcValueIntoType(value)
 		if t != None:
 			out.append(t)
 		else:
 			if(value._type == Type.Array):
-				t = typeToTypeInfo(pack.arrayType) | ARRAY_FLAG_MASK
+				t = typeToTypeInfo(value.arrayType) | ARRAY_FLAG_MASK
 			else:
 				t = typeToTypeInfo(value._type)
 			out.append(t)
@@ -622,5 +613,5 @@ class Blob(bytearray):
 		ret = RpcValue([], Type.Array)
 		size: int = s.read_UIntData()
 		for i in range(size):
-			ret.value.append(readData(item_type_info, False))
+			ret.value.append(s.readData(item_type_info, False))
 

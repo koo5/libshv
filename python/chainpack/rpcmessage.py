@@ -10,25 +10,25 @@ class uint(int):
 class RpcMessage():
 	class Key(enum.IntFlag):
 		Id = 1,
-		Method,
-		Params,
-		Result,
-		Error,
-		ErrorCode,
-		ErrorMessage,
-		MAX_KEY
+		Method = 2,
+		Params = 3,
+		Result = 4,
+		Error = 5,
+		ErrorCode = 6,
+		ErrorMessage = 7,
+		MAX_KEY = 8
 
 	class Tag(enum.IntFlag):
 		RequestId = meta.Tag.USER,
-		RpcCallType,
-		DeviceId,
-		MAX
+		RpcCallType = meta.Tag.USER + 1,
+		DeviceId = meta.Tag.USER + 2,
+		MAX = meta.Tag.USER + 3
 
 	class RpcCallType(enum.IntFlag):
 		Undefined = 0,
-		Request,
-		Response,
-		Notify
+		Request = 1,
+		Response = 2,
+		Notify = 3
 
 	def __init__(s, val: RpcValue) -> None:
 		assert(val.isIMap());
@@ -57,7 +57,7 @@ class RpcMessage():
 		s.__setitem__(Key.Id, RpcValue(id));
 
 	def isValid(s) -> bool:
-		return ._value.isValid()
+		return s._value.isValid()
 
 	def isRequest(s) -> bool:
 		return s.hasKey(Key.Method);
@@ -68,26 +68,27 @@ class RpcMessage():
 	def isResponse(s) -> bool:
 		return s.hasKey(Key.Id) and (hasKey(Key.Result) or hasKey(Key.Error));
 
-	def write(out: Blob) -> int:
+	def write(out: ChainPackProtocol) -> int:
 		assert(s._value.isValid());
 		assert(rpcType() != meta.RpcMessage.RpcCallType.Undefined);
-		return Blob.write(out, s._value);
+		return out.write(s._value);
 
 	def rpcType(s) -> meta.RpcMessage.RpcCallType.Enum:
 		rpc_id: int = s.id();
-		has_method: bool = s.hasKey(meta.RpcMessage.Key::Method);
-		if(has_method)
+		has_method: bool = s.hasKey(meta.RpcMessage.Key.Method);
+		if(has_method):
 			if rpc_id > 0:
 				return meta.RpcMessage.RpcCallType.Request
+			else:
 				return meta.RpcMessage.RpcCallType.Notify;
 		if s.hasKey(meta.RpcMessage.Key.Result) or s.hasKey(meta.RpcMessage.Key.Error):
 			return meta.RpcMessage.RpcCallType.Response;
 		return meta.RpcMessage.RpcCallType.Undefined;
 
 	def checkMetaValues(s) -> None:
-		if(!s._value.isValid()):
+		if not s._value.isValid():
 			s._value = RpcValue({}, Type.IMap)
-			s._value.setMetaValue(Tag.MetaTypeId, meta.RpcMessage.ID);
+			s._value.setMetaValue(meta.Tag.MetaTypeId, meta.RpcMessage.ID);
 
 	def checkRpcTypeMetaValue(s):
 		if s.isResponse():
@@ -168,7 +169,7 @@ class RpcResponse(RpcMessage):
 	def error(self) -> Error:
 		return Error(value(meta.RpcResponse.Error).toImap());
 
-	def setError(self, RpcResponse: err) -> RpcResponse
+	def setError(self, RpcResponse: err) -> RpcResponse:
 		setRpcValue(Key.Error, RpcValue(err));
 		checkRpcTypeMetaValue();
 

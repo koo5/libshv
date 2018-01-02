@@ -18,7 +18,7 @@ class RpcDriver():
 	m_messageReceivedCallback = None
 	
 	def sendMessage(msg: RpcValue):
-		out = Blob()
+		out = ChainPackProtocol()
 		out.write(msg)
 		log("send message: packed data: ",  (if packed_data.size() > 50: str(out[:50]) + "<... long data ...>") else out))
 		enqueueDataToSend(out);
@@ -42,8 +42,8 @@ class RpcDriver():
 		chunk: Chunk = s.m_chunkQueue[0];
 
 		if s.m_headChunkBytesWrittenSoFar == 0:
-			protocol_version_data = Blob(RpcValue(PROTOCOL_VERSION, Type.UInt))
-			packet_len_data = Blob(RpcValue(len(protocol_version_data) + len(chunk), Type.UInt))
+			protocol_version_data = ChainPackProtocol(RpcValue(PROTOCOL_VERSION, Type.UInt))
+			packet_len_data = ChainPackProtocol(RpcValue(len(protocol_version_data) + len(chunk), Type.UInt))
 			written_len = writeBytes(packet_len_data, len(packet_len_data));
 			if(written_len < 0):
 				raise Exception("Write socket error!");
@@ -91,7 +91,7 @@ class RpcDriver():
 	def processReadData(read_data: bytes) -> int:
 		log("processReadData data len:", len(read_data))
 		initial_len = len(read_data)
-		input = Blob(read_data)
+		input = ChainPackProtocol(read_data)
 		ok, chunk_len = s.tryRead_UIntData(input);
 		if not ok:
 			return 0;

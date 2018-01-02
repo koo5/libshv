@@ -16,11 +16,11 @@ def test1():
 
 def test2():
 	for t in range(TypeInfo.TERMINATION, TypeInfo.TRUE+1):
-		print(t, Blob(t), TypeInfo(t))
+		print(t, ChainPackProtocol(t), TypeInfo(t))
 
 def test3():
 	for t in range(TypeInfo.Null, TypeInfo.MetaIMap+1):
-		print(t, Blob(t), TypeInfo(t))
+		print(t, ChainPackProtocol(t), TypeInfo(t))
 
 def testNull():
 	print("------------- NULL")
@@ -29,7 +29,7 @@ def testTinyUint():
 	print("------------- tiny uint")
 	for n in range(64):
 		cp1 = RpcValue(n);
-		out = Blob()
+		out = ChainPackProtocol()
 		len = out.write(cp1)
 		if(n < 10):
 			print(n, " ", cp1, " len: ", len, " dump: ", out)
@@ -44,7 +44,7 @@ def testUint():
 	n = 3
 	while n < (n_max/3 - 1):
 		cp1 = RpcValue(n, Type.UInt);
-		out = Blob()
+		out = ChainPackProtocol()
 		l = out.write(cp1)
 		print(n, " ", cp1, " len: ", l, " dump: ", out)
 		cp2 = out.read()
@@ -60,9 +60,9 @@ def testIMap():
 		(2, "bar"),
 		(3, "baz")]), Type.IMap)
 	cp1 = RpcValue(map)
-	out = Blob()
+	out = ChainPackProtocol()
 	len = out.write(cp1)
-	out2 = Blob(out)
+	out2 = ChainPackProtocol(out)
 	cp2 = out.read()
 	print(cp1, cp2, " len: ", len, " dump: ", out2)
 	assert cp1 == cp2
@@ -72,9 +72,9 @@ def testIMap2():
 		(127, RpcValue([11,12,13])),
 		(128, 2),
 		(129, 3)]), Type.IMap)
-	out = Blob()
+	out = ChainPackProtocol()
 	l: int = out.write(cp1)
-	out2 = Blob(out)
+	out2 = ChainPackProtocol(out)
 	cp2: RpcValue = out.read()
 	print(cp1 ,cp2," len: " ,l ," dump: " ,out2);
 	cp1.assertEquals(cp2)
@@ -86,7 +86,7 @@ def testMeta():
 	cp1.setMetaValue(Tag.MetaTypeId, RpcValue(2, Type.UInt))
 	cp1.setMetaValue(Tag.USER, "foo")
 	cp1.setMetaValue(Tag.USER+1, RpcValue([1,2,3]))
-	out = Blob()
+	out = ChainPackProtocol()
 	l = out.write(cp1)
 	orig_len = len(out)
 	orig_out = out
@@ -98,7 +98,7 @@ def testMeta():
 
 
 def encode(x):
-	r = Blob(x)
+	r = ChainPackProtocol(x)
 	print("encoded:",r)
 	return r
 
