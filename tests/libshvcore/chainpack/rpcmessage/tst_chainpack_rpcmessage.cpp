@@ -78,7 +78,7 @@ private:
 		RpcValue cp1 = rq.value();
 		int len = rq.write(out);
 		RpcValue cp2 = ChainPackProtocol::read(out);
-		qDebug() << cp1.toStdString() << " " << cp2.toStdString() << " len: " << len << " dump: " << binary_dump(out.str());
+		qDebug() << cp1.toStdStrng() << " " << cp2.toStdString() << " len: " << len << " dump: " << binary_dump(out.str());
 		QCOMPARE(cp1.type(), cp2.type());
 		RpcRequest rq2(cp2);
 		QVERIFY(rq2.isRequest());

@@ -123,16 +123,11 @@ class RpcMessage():
 
 
 class RpcRequest(RpcMessage):
-	RpcValue RpcRequest::params() const
-	{
-		return value(meta::RpcMessage::Key::Params);
-	}
+	def params(s) -> RpcValue:
+		return value(meta.RpcMessage.Key.Params);
 
-	RpcRequest& RpcRequest::setParams(const RpcValue& p)
-	{
-		setValue(meta::RpcMessage::Key::Params, p);
-		return *this;
-	}
+	def setParams(s, p: RpcValue):
+		s.setValue(meta.RpcMessage.Key.Params, p);
 
 
 
@@ -140,8 +135,9 @@ class RpcRequest(RpcMessage):
 class RpcResponse(RpcMessage):
 	class Error(dict):
 		class Key(enum.IntFlag):
-			KeyCode = 1,
-			KeyMessage
+			Code = 1,
+			Message
+
 		class ErrorType(enum.IntFlag):
 			NoError = 0,
 			InvalidRequest,	#// The JSON sent is not a valid Request object.
@@ -153,16 +149,18 @@ class RpcResponse(RpcMessage):
 			SyncMethodCallCancelled,
 			MethodInvocationException,
 			Unknown
-		def code(self) -> ErrorType:
-			if KeyCode in self:
-				return self[KeyCode].toUInt();
-			return NoError
-		def setCode(self, ErrorType: c) -> Error:
-			self[KeyCode] = RpcValue(uint(c));
-			return self;
 
-		def setMessage(self, str: mess) -> Error:
-			self[KeyMessage] = RpcValue(mess);
+		def code(s) -> ErrorType:
+			if Key.Code in s:
+				return s[Key.Code].toUInt();
+			return NoError
+
+		def setCode(s, ErrorType: c) -> Error:
+			s[KeyCode] = RpcValue(uint(c));
+			return s;
+
+		def setMessage(s, str: mess) -> Error:
+			s[KeyMessage] = RpcValue(mess);
 			return self
 
 		def message(self) -> str:
