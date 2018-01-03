@@ -633,4 +633,4 @@ class ChainPackProtocol(bytearray):
 		size: int = s.read_UIntData()
 		for i in range(size):
 			ret.value.append(s.readData(item_type_info, False))
-
+		return ret
