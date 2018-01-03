@@ -15,7 +15,7 @@ const MetaInfo &MetaType::tagById(int id) const
 	static std::map<int, MetaInfo> embeded_mi = {
 		{(int)Tag::Invalid, {(int)Tag::Invalid, ""}},
 		{(int)Tag::MetaTypeId, {(int)Tag::MetaTypeId, "MetaTypeId"}},
-		{(int)Tag::MetaTypeId, {(int)Tag::MetaTypeId, "MetaTypeNameSpaceId"}},
+		{(int)Tag::MetaTypeId, {(int)Tag::MetaTypeId, "MetaTypeNameSpaceId"}},//?
 	};
 	if(id <= (int)Tag::MetaTypeId)
 		return embeded_mi[id];

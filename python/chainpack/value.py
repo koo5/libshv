@@ -158,14 +158,33 @@ class RpcValue():
 		assert s.value == x.value
 		assert s._metaData == x._metaData
 
+	def toPython(s):
+		if isinstance(s._value, dict):
+			r = {}
+			for k,v in s._value.items():
+				assert(isinstance(k, (str, int)))
+				r[k] = v.toPython()
+			return r
+		elif isinstance(s._value, list):
+			r = []
+			for i in s._value:
+				r.append(i.toPython())
+			return r
+		else:
+			return s._value
+
 	def __repr__(s):
-		out = "RpcValue("
+		out = ""
 		if len(s._metaData):
-			out += '<' + str(s._metaData) + '>'
-		#out += RpcValue::typeToName(type());
-		#	out += '(' + s + ')';
-		#	break;
-		return out + str(s._value) + ")"
+			out += '<@' + str(s._metaData) + '@>'
+		out += '<' + s._type._name_ + '>';
+		out += str(type(s._value))
+		out += s._value.__repr__()
+		value_repr = s._value.__repr__()
+		if isinstance(s._value, str):
+			value_repr = '"' + value_repr[1:-1] + '"'
+		#return "RpcValue(" + out  + ")"
+		return value_repr
 
 	def __len__(s):
 		return len(s._value)
@@ -415,7 +434,7 @@ class ChainPackProtocol(bytearray):
 		b = v.encode('utf-8')
 		s.write_Blob(b)
 
-	def read_String(s):
+	def read_String(s) -> str:
 		return s.read_Blob().decode('utf-8')
 
 	def write_DateTime(s, v):
@@ -451,14 +470,15 @@ class ChainPackProtocol(bytearray):
 			if s.peek() == TypeInfo.TERMINATION:
 				s.pop(0)
 				break
-			key = s.read()
-			ret.value[key.value] = s.read()
+			key = s.read_String()
+			ret.value[key] = s.read()
 		return ret
 
 	def writeData_Map(s, map: dict) -> None:
 		assert type(map) == dict
 		for k, v in map.items():
-			s.write(RpcValue(k))
+			assert isinstance(k, str)
+			s.write_String(RpcValue(k))
 			s.write(v)
 		s.append(TypeInfo.TERMINATION)
 
@@ -552,7 +572,6 @@ class ChainPackProtocol(bytearray):
 		if  (head & 64) == 0: l = 1
 		elif(head & 32) == 0: l = 2
 		elif(head & 16) == 0: l = 3
-		elif(head & 16) == 0: l = 4
 		else: l = (head & 15) + s.INT_MASK_CNT + 1;
 
 		if(l < 4):
