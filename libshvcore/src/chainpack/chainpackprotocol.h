@@ -29,6 +29,7 @@ public:
 			Map,
 			IMap,
 			MetaIMap,
+			Decimal,
 			/// arrays
 			Null_Array = Null | ARRAY_FLAG_MASK, // if bit 6 is set, then packed value is an Array of corresponding values
 			UInt_Array = UInt | ARRAY_FLAG_MASK,
@@ -42,7 +43,7 @@ public:
 			Map_Array = Map | ARRAY_FLAG_MASK,
 			IMap_Array = IMap | ARRAY_FLAG_MASK,
 			MetaIMap_Array = MetaIMap | ARRAY_FLAG_MASK,
-			/// auxiliary types used for optimization
+			Decimal_Array = Decimal | ARRAY_FLAG_MASK,
 			FALSE = 253,
 			TRUE = 254,
 			TERM = 255,
@@ -64,17 +65,17 @@ private:
 	static TypeInfo::Enum readTypeInfo(std::istream &data, RpcValue &meta, int &tiny_uint);
 	static RpcValue readData(TypeInfo::Enum tid, bool is_array, std::istream &data);
 private:
-	static void writeData_Array(std::ostream &out, const RpcValue::Array &array);
-	static void writeData_List(std::ostream &out, const RpcValue::List &list);
-	static void writeData_Map(std::ostream &out, const RpcValue::Map &map);
-	static void writeData_IMap(std::ostream &out, const RpcValue::IMap &map);
+	static void writeData_ArrayData(std::ostream &out, const RpcValue::Array &array);
+	static void writeData_ListData(std::ostream &out, const RpcValue::List &list);
+	static void writeData_MapData(std::ostream &out, const RpcValue::Map &map);
+	static void writeData_IMapData(std::ostream &out, const RpcValue::IMap &map);
 
 	static RpcValue::MetaData readMetaData(std::istream &data);
 
-	static RpcValue::List readData_List(std::istream &data);
+	static RpcValue::List readData_ListData(std::istream &data);
 	static RpcValue::Array readData_Array(TypeInfo::Enum type_info, std::istream &data);
-	static RpcValue::Map readData_Map(std::istream &data);
-	static RpcValue::IMap readData_IMap(std::istream &data);
+	static RpcValue::Map readData_MapData(std::istream &data);
+	static RpcValue::IMap readData_IMapData(std::istream &data);
 };
 
 }}}

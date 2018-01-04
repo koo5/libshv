@@ -351,6 +351,25 @@ private:
 			}
 		}
 		{
+			qDebug() << "------------- Decimal";
+			{
+				RpcValue::Int mant = 123456789;
+				int prec_max = 16;
+				int prec_min = -16;
+				int step = 1;
+				for (int prec = prec_min; prec <= prec_max; prec += step) {
+					RpcValue cp1{RpcValue::Decimal(mant, prec)};
+					std::stringstream out;
+					int len = ChainPackProtocol::write(out, cp1);
+					QVERIFY(len > 1);
+					RpcValue cp2 = ChainPackProtocol::read(out);
+					qDebug() << mant << prec << " - " << cp1.toStdString() << " " << cp2.toStdString() << " len: " << len << " dump: " << binary_dump(out.str()).c_str();
+					QVERIFY(cp1.type() == cp2.type());
+					QVERIFY(cp1 == cp2);
+				}
+			}
+		}
+		{
 			qDebug() << "------------- bool";
 			for(bool b : {false, true}) {
 				RpcValue cp1{b};

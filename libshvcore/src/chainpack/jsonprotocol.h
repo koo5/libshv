@@ -59,6 +59,7 @@ public:
 	static void dumpJson(RpcValue::UInt value, std::string &out);
 	static void dumpJson(bool value, std::string &out);
 	static void dumpJson(RpcValue::DateTime value, std::string &out);
+	static void dumpJson(RpcValue::Decimal value, std::string &out);
 	static void dumpJson(const std::string &value, std::string &out);
 	static void dumpJson(const RpcValue::Blob &value, std::string &out);
 	static void dumpJson(const RpcValue::List &values, std::string &out);

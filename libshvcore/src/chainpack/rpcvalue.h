@@ -41,11 +41,42 @@ public:
 		Map,
 		IMap,
 		MetaIMap,
+		Decimal,
 	};
 	static const char* typeToName(Type t);
 
 	using Int = CHAINPACK_INT;
 	using UInt = CHAINPACK_UINT;
+	class SHVCORE_DECL_EXPORT Decimal
+	{
+		Int m_mantisa = 0;
+		int16_t m_precision = 0;
+	public:
+		Decimal() : m_precision(-1) {}
+		Decimal(Int mantisa, int precision) : m_mantisa(mantisa), m_precision(precision) {}
+		Decimal(double n, int precision) : m_precision(precision)
+		{
+			if(precision > 0) {
+				//m_mantisa = (int)(n * std::pow(10, precision) + 0.5);
+				for(; precision > 0; precision--) n *= 10;
+				m_mantisa = (Int)(n + 0.5);
+			}
+		}
+		Int mantisa() const {return m_mantisa;}
+		int precision() const {return m_precision;}
+		double toDouble() const
+		{
+			double ret = mantisa();
+			int prec = precision();
+			if(prec > 0)
+				for(; prec > 0; prec--) ret /= 10;
+			else
+				for(; prec < 0; prec++) ret *= 10;
+			return ret;
+		}
+		bool isValid() const {return !(mantisa() == 0 && precision() != 0);}
+		std::string toString() const;
+	};
 	struct SHVCORE_DECL_EXPORT DateTime
 	{
 		int64_t msecs = 0;
@@ -180,13 +211,14 @@ public:
 	RpcValue(RpcValue &&other) noexcept : RpcValue() { swap(other); }
 #endif
 	RpcValue(std::nullptr_t) noexcept;  // Null
-	RpcValue(double value);             // Double
+	RpcValue(bool value);               // Bool
 	RpcValue(Int value);                // Int
 	RpcValue(UInt value);                // UInt
 	RpcValue(int value) : RpcValue((Int)value) {}
 	RpcValue(uint16_t value) : RpcValue((UInt)value) {}
 	RpcValue(unsigned int value) : RpcValue((UInt)value) {}
-	RpcValue(bool value);               // Bool
+	RpcValue(double value);             // Double
+	RpcValue(Decimal value);             // Decimal
 	RpcValue(const DateTime &value);
 	RpcValue(const Blob &value); // Blob
 	RpcValue(Blob &&value);
@@ -249,6 +281,7 @@ public:
 	bool isIMap() const { return type() == Type::IMap; }
 
 	double toDouble() const;
+	Decimal toDecimal() const;
 	Int toInt() const;
 	UInt toUInt() const;
 	bool toBool() const;

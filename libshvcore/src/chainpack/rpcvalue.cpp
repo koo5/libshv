@@ -101,6 +101,7 @@ public:
 
 	virtual bool isNull() const {return false;}
 	virtual double toDouble() const {return 0;}
+	virtual RpcValue::Decimal toDecimal() const { return RpcValue::Decimal{}; }
 	virtual RpcValue::Int toInt() const {return 0;}
 	virtual RpcValue::UInt toUInt() const {return 0;}
 	virtual bool toBool() const {return false;}
@@ -224,6 +225,17 @@ class ChainPackDouble final : public ValueData<RpcValue::Type::Double, double>
 	//bool less(const Data * other) const override { return m_value < other->toDouble(); }
 public:
 	explicit ChainPackDouble(double value) : ValueData(value) {}
+};
+
+class ChainPackDecimal final : public ValueData<RpcValue::Type::Decimal, RpcValue::Decimal>
+{
+	double toDouble() const override { return m_value.toDouble(); }
+	RpcValue::Int toInt() const override { return static_cast<int>(m_value.toDouble()); }
+	RpcValue::Decimal toDecimal() const override { return m_value; }
+	bool equals(const RpcValue::AbstractValueData * other) const override { return toDouble() == other->toDouble(); }
+	//bool less(const Data * other) const override { return m_value < other->toDouble(); }
+public:
+	explicit ChainPackDecimal(RpcValue::Decimal &&value) : ValueData(std::move(value)) {}
 };
 
 class ChainPackInt final : public ValueData<RpcValue::Type::Int, RpcValue::Int>
@@ -516,7 +528,7 @@ static const RpcValue::IMap & static_empty_imap() { static const RpcValue::IMap 
 RpcValue::RpcValue() noexcept {}
 RpcValue::RpcValue(std::nullptr_t) noexcept : m_ptr(statics().null) {}
 RpcValue::RpcValue(double value) : m_ptr(std::make_shared<ChainPackDouble>(value)) {}
-
+RpcValue::RpcValue(RpcValue::Decimal value) : m_ptr(std::make_shared<ChainPackDecimal>(std::move(value))) {}
 RpcValue::RpcValue(Int value) : m_ptr(std::make_shared<ChainPackInt>(value)) {}
 RpcValue::RpcValue(UInt value) : m_ptr(std::make_shared<ChainPackUInt>(value)) {}
 RpcValue::RpcValue(bool value) : m_ptr(value ? statics().t : statics().f) {}
@@ -636,6 +648,7 @@ bool RpcValue::isValid() const
 }
 
 double RpcValue::toDouble() const { return m_ptr? m_ptr->toDouble(): 0; }
+RpcValue::Decimal RpcValue::toDecimal() const { return m_ptr? m_ptr->toDecimal(): Decimal(); }
 RpcValue::Int RpcValue::toInt() const { return m_ptr? m_ptr->toInt(): 0; }
 RpcValue::UInt RpcValue::toUInt() const { return m_ptr? m_ptr->toUInt(): 0; }
 bool RpcValue::toBool() const { return m_ptr? m_ptr->toBool(): false; }
@@ -777,6 +790,7 @@ const char *RpcValue::typeToName(RpcValue::Type t)
 	case Type::IMap: return "IMap";
 	case Type::DateTime: return "DateTime";
 	case Type::MetaIMap: return "MetaIMap";
+	case Type::Decimal: return "Decimal";
 	}
 	return "UNKNOWN"; // just to remove mingw warning
 }
@@ -977,6 +991,25 @@ std::string RpcValue::MetaData::toStdString() const
 		}
 	}
 	return out;
+}
+
+std::string RpcValue::Decimal::toString() const
+{
+	std::string ret = shv::core::Utils::toString(mantisa());
+	int prec = precision();
+	if(prec >= 0) {
+		int len = (int)ret.length();
+		if(prec > len)
+			ret.insert(0, prec - len, '0'); // insert '0' after dec point
+		ret.insert(ret.length() - prec, 1, '.');
+		if(prec >= len)
+			ret.insert(0, 1, '0'); // insert '0' before dec point
+	}
+	else {
+		ret.insert(ret.length(), -prec, '0');
+		ret.push_back('.');
+	}
+	return ret;
 }
 
 }}}

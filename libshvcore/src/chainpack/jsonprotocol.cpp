@@ -468,6 +468,11 @@ void JsonProtocol::dumpJson(RpcValue::DateTime value, std::string &out)
 	out += value.toString();
 }
 
+void JsonProtocol::dumpJson(RpcValue::Decimal value, std::string &out)
+{
+	out += value.toString();
+}
+
 void JsonProtocol::dumpJson(const std::string &value, std::string &out)
 {
 	out += '"';
