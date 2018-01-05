@@ -256,6 +256,8 @@ class ChainPackProtocol(bytearray):
 			s.append(i)
 
 	def get(s):
+		if (not len(s)):
+			raise ChainpackDeserializationException("unexpected end of stream!");
 		return s.pop(0)
 
 	def peek(s):
@@ -361,13 +363,13 @@ class ChainPackProtocol(bytearray):
 			return RpcValue(val);
 		else:
 			if   t == TypeInfo.Null:     return RpcValue(None)
-			elif t == TypeInfo.UInt:     return RpcValue(s.read_UIntData(), Type.UInt)
-			elif t == TypeInfo.Int:      return RpcValue(s.read_IntData())
+			elif t == TypeInfo.UInt:     return RpcValue(s.readData_UInt(), Type.UInt)
+			elif t == TypeInfo.Int:      return RpcValue(s.readData_Int())
 			elif t == TypeInfo.Double:   return RpcValue(s.read_fmt(s.DOUBLE_FMT))
 			elif t == TypeInfo.TRUE:     return RpcValue(True)
 			elif t == TypeInfo.FALSE:    return RpcValue(False)
 			elif t == TypeInfo.DateTime: return RpcValue(s.read_DateTime())
-			elif t == TypeInfo.String:   return RpcValue(s.read_String())
+			elif t == TypeInfo.String:   return RpcValue(s.readData_String())
 			elif t == TypeInfo.Blob:     return RpcValue(s.read_Blob())
 			elif t == TypeInfo.List:     return RpcValue(s.readData_List())
 			elif t == TypeInfo.Map:      return RpcValue(s.readData_Map())
@@ -380,11 +382,11 @@ class ChainPackProtocol(bytearray):
 		t = val.type # type: Type
 		if   t == Type.Null:     return
 		elif t == Type.Bool:     s.append([b'0', b'1'][v])
-		elif t == Type.UInt:     s.write_UIntData(v)
-		elif t == Type.Int:      s.write_IntData(v)
+		elif t == Type.UInt:     s.writeData_UInt(v)
+		elif t == Type.Int:      s.writeData_Int(v)
 		elif t == Type.Double:   s.write_fmt(s.DOUBLE_FMT, v)
 		elif t == Type.DateTime: s.write_DateTime(v)
-		elif t == Type.String:   s.write_String(v)
+		elif t == Type.String:   s.writeData_String(v)
 		elif t == Type.Blob:     s.write_Blob(v)
 		elif t == Type.List:     s.writeData_List(v)
 		elif t == Type.Array:    s.writeData_List(v)
@@ -420,28 +422,28 @@ class ChainPackProtocol(bytearray):
 
 	def write_Blob(s, b):
 		assert type(b) in (bytearray, bytes)
-		s.write_UIntData(len(b))
+		s.writeData_UInt(len(b))
 		for i in b:
-			s.write_UIntData(i)
+			s.writeData_UInt(i)
 
 	def read_Blob(s):
 		r = bytearray()
-		for i in range(s.read_UIntData()):
-			r.append(s.read_UIntData())
+		for i in range(s.readData_UInt()):
+			r.append(s.readData_UInt())
 		return r
 
-	def write_String(s, v):
+	def writeData_String(s, v):
 		b = v.encode('utf-8')
 		s.write_Blob(b)
 
-	def read_String(s) -> str:
+	def readData_String(s) -> str:
 		return s.read_Blob().decode('utf-8')
 
 	def write_DateTime(s, v):
-		s.write_IntData(floor(v.timestamp()*1000))
+		s.writeData_Int(floor(v.timestamp() * 1000))
 
 	def read_DateTime(s):
-		datetime.utcfromtimestamp(s.read_IntData() / 1000)
+		datetime.utcfromtimestamp(s.readData_Int() / 1000)
 
 	def readData_IMap(s) -> RpcValue:
 		ret = RpcValue({}, Type.IMap)
@@ -451,7 +453,7 @@ class ChainPackProtocol(bytearray):
 			if s.peek() == TypeInfo.TERMINATION:
 				s.pop(0)
 				break
-			key = s.read_UIntData()
+			key = s.readData_UInt()
 			ret.value[key] = s.read()
 		return ret
 
@@ -460,7 +462,7 @@ class ChainPackProtocol(bytearray):
 		for k, v in map.items():
 			if not isinstance(k, int) or k < 0:
 				raise ChainpackTypeException('k.type != Type.UInt')
-			s.write_UIntData(k)
+			s.writeData_UInt(k)
 			s.write(v)
 		s.append(TypeInfo.TERMINATION)
 
@@ -470,7 +472,7 @@ class ChainPackProtocol(bytearray):
 			if s.peek() == TypeInfo.TERMINATION:
 				s.pop(0)
 				break
-			key = s.read_String()
+			key = s.readData_String()
 			ret.value[key] = s.read()
 		return ret
 
@@ -478,159 +480,77 @@ class ChainPackProtocol(bytearray):
 		assert type(map) == dict
 		for k, v in map.items():
 			assert isinstance(k, str)
-			s.write_String(RpcValue(k))
+			s.writeData_String(k)
 			s.write(v)
 		s.append(TypeInfo.TERMINATION)
 
-	"""/* UInt
-	   0 ... 127              |0|x|x|x|x|x|x|x|<-- LSB
-	  128 ... 16383 (2^14-1)  |1|0|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-	2^14 ... 2097151 (2^21-1) |1|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-	                          |1|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-	                          |1|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| ... <-- LSB
-	                          n ==  0 -> 4 bytes (32 bit number)
-	                          n ==  1 -> 5 bytes
-	                          n == 14 -> 19 bytes
-	                          n == 15 -> for future (number of bytes will be specified in next byte)
-	*/"""
-
-	UINT_MASK_CNT = 4
-
-	def read_UIntData(s):
-		n = 0;
-		masks = (127, 63, 31, 15)
-		if (not len(s)):
-			raise ChainpackDeserializationException("read_UInt: unexpected end of stream!");
-		head:int = s.get();
-		if  (head & 128)== 0: l = 1
-		elif(head & 64) == 0: l = 2
-		elif(head & 32) == 0: l = 3
-		elif(head & 16) == 0: l = 4
-		else: l = (head & 15) + s.UINT_MASK_CNT + 1;
-		l-=1;
-		if(l < 4):
-			n = head & masks[l];
-
-		for i in range(l):
-			if (not len(s)):
-				raise ChainpackDeserializationException("read_UInt: unexpected end of stream!");
-			r = s.get();
-			n = (n << 8) + r;
-		return n;
-
-	def write_UIntData(s, n: int):
-		UINT_BYTES_MAX = 19;
-		out = bytearray()
-		prefixes = (0 << 4, 8 << 4, 12 << 4, 14 << 4);
-		while True:
-			r = n & 255;
-			n = n >> 8;
-			out.append(r)
-			if not n:
-				break
-		if(len(out) >= UINT_BYTES_MAX):
-			raise Exception("write_UIntData: value too big to pack!");
-		msb = out[-1];
-		byte_cnt = len(out)
-		if (((byte_cnt == 1) and (msb >= 128))
-		or ((byte_cnt == 2) and (msb >= 64))
-		or ((byte_cnt == 3) and (msb >= 32))
-		or ((byte_cnt == 4) and (msb >= 16))
-		or (byte_cnt > 4)):
-			out.append(0)
-		if(len(out) > s.UINT_MASK_CNT):
-			out[-1] = 0xF0 | (len(out) - s.UINT_MASK_CNT - 1);
+	def bytes_needed(s, bit_len: int) -> int:
+		if (bit_len <= 28):
+			return (bit_len - 1) // 7 + 1;
 		else:
-			prefix = prefixes[len(out)-1];
-			out[-1] |= prefix;
-		out.reverse()
-		s.add(out)
+			return (bit_len - 1) // 8 + 2;
 
-	"""
-/*
-   0 ... 63              |s|0|x|x|x|x|x|x|<-- LSB
-  64 ... 2^13-1          |s|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-2^13 ... 2^20-1          |s|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                         |s|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                          n ==  0 -> 3 bytes
-                          n ==  1 -> 4 bytes
-                          n == 14 -> 18 bytes
-                          n == 15 -> for future (number of bytes will be specified in next byte)
-*/
-	"""
+	def writeData_UInt(s, num):
+		assert num >= 0
+		UINT_BYTES_MAX = 18;
+		if num.bit_length() > UINT_BYTES_MAX * 8:
+			SHV_EXCEPTION("writeData_UInt: value too big to pack!");
+		s.writeData_int_helper(num, num.bit_length());
 
-	INT_MASK_CNT = 3;
+	def writeData_Int(s, snum):
+		num = -snum if snum < 0 else snum
+		neg = snum < 0
+		bitlen = num.bit_length() + 1
+		if (neg):
+			sign_pos = s.expand_bit_len(bitlen);
+			sign_bit_mask = 1 << sign_pos;
+			num |= sign_bit_mask;
+		s.writeData_int_helper(num, bitlen);
 
-	def read_IntData(s):
-		n = 0;
-		masks = (63, 31, 15);
-		if (not len(s)):
-			raise ChainpackDeserializationException("read_Int: unexpected end of stream!");
-		head:int = s.get();
-		sign :bool = head & 128;
-
-		if  (head & 64) == 0: l = 1
-		elif(head & 32) == 0: l = 2
-		elif(head & 16) == 0: l = 3
-		else: l = (head & 15) + s.INT_MASK_CNT + 1;
-
-		if(l < 4):
-			l-=1
-			n = head & masks[l];
+	def writeData_int_helper(s,	num, bit_len: int):
+		byte_cnt = s.bytes_needed(bit_len);
+		b = bytearray()
+		for i in range(byte_cnt - 1, -1, -1):
+			b.insert(0, num & 255)
+			num = num >> 8;
+		head = b[0];
+		if (bit_len <= 28):
+			mask = 0xf0 << (4 - byte_cnt);
+			head = head & ~mask;
+			mask = mask << 1;
+			head = head | mask;
 		else:
-			l-=1
+			head = 0xf0 | (byte_cnt - 5);
+		b[0] = head & 255
+		s.add(b)
 
-		for i in range(l):
-			if (not len(s)):
-				raise ChainpackDeserializationException("read_Int: unexpected end of stream!");
-			r = s.get();
-			n = (n << 8) + r;
+	def readData_Int(s):
+		num = readData_UInt(data);
+		sign_bit_mask = 1 << (num.bit_length() - 1);
+		neg = num & sign_bit_mask;
+		snum = num;
+		if (neg):
+			snum &= ~sign_bit_mask;
+			snum = -snum;
+		return snum;
 
-		if(sign):
-			n = -n;
-		return n;
-
-
-	def write_IntData(s, n):
-		INT_BYTES_MAX = 18;
-		prefixes = (0 << 3, 8 << 3, 12 << 3)
-	#if(n == std::numeric_limits<T>::min()) {
-	#	std::cerr << "cannot pack MIN_INT, will be packed as MIN_INT+1\n";
-	#	n++;
-		out = bytearray()
-		sign = (n < 0);
-		if(sign):
-			n = -n;
-		while True:
-			r = n & 255;
-			n = n >> 8;
-			out.append(r)
-			if not n:
-				break
-		if (len(out) > INT_BYTES_MAX) or ((len(out) == INT_BYTES_MAX) and (r & 128)):
-			raise Exception("write_IntData: value too big to pack!");
-		msb = out[-1];
-		byte_cnt = len(out)
-		if (((byte_cnt == 1) and (msb >= 64))
-		or ((byte_cnt == 2) and (msb >= 32))
-		or ((byte_cnt == 3) and (msb >= 16))
-		or (byte_cnt > 3)):
-			out.append(0)
-		byte_cnt = len(out)
-		if(byte_cnt > s.INT_MASK_CNT):
-			out[-1] = 0x70 | (byte_cnt - s.INT_MASK_CNT - 1);
+	def readData_UInt(s):
+		head = s.get()
+		num = 0
+		if  ((head & 128) == 0): bytes_to_read_cnt = 0; num = head & 127; bitlen = 7;
+		elif ((head & 64) == 0): bytes_to_read_cnt = 1; num = head & 63; bitlen = 6 + 8;
+		elif ((head & 32) == 0): bytes_to_read_cnt = 2; num = head & 31; bitlen = 5 + 2 * 8;
+		elif ((head & 16) == 0): bytes_to_read_cnt = 3; num = head & 15; bitlen = 4 + 3 * 8;
 		else:
-			out[-1] |= prefixes[byte_cnt-1];
-		if(sign):
-			out[-1] |= 128;
-		out.reverse()
-		s.add(out)
-
+			bytes_to_read_cnt = (head & 0xf) + 4;
+		for i in range(bytes_to_read_cnt):
+			num = (num << 8) + s.get()
+		return num
 
 	def readData_Array(s, item_type_info):
 		#item_type = typeInfoToType(item_type_info)
 		ret = RpcValue([], Type.Array)
-		size: int = s.read_UIntData()
+		size: int = s.readData_UInt()
 		for i in range(size):
 			ret.value.append(s.readData(item_type_info, False))
 		return ret

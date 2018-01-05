@@ -403,7 +403,7 @@ private:
 			qDebug() << "------------- blob";
 			RpcValue::Blob blob{"fpowfksap\0ofkpsaokfsa"};
 			blob[5] = 0;
-			RpcValue cp1{blob};
+			RpcValue cp1{0};
 			std::stringstream out;
 			int len = ChainPackProtocol::write(out, cp1);
 			RpcValue cp2 = ChainPackProtocol::read(out);
