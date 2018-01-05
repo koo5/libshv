@@ -67,7 +67,7 @@ T readData_UInt(std::istream &data, bool *ok = nullptr)
 }
 
 template<typename T>
-void write_UIntData(std::ostream &out, T n)
+void writeData_UInt(std::ostream &out, T n)
 {
 	constexpr int UINT_BYTES_MAX = 19;
 	uint8_t bytes[1 + sizeof(T)];
@@ -145,7 +145,7 @@ T readData_Int(std::istream &data)
 }
 
 template<typename T>
-void write_IntData(std::ostream &out, T n)
+void writeData_Int(std::ostream &out, T n)
 {
 	constexpr int INT_BYTES_MAX = 18;
 	uint8_t bytes[1 + sizeof(T)];
@@ -222,8 +222,8 @@ RpcValue::Decimal readData_Decimal(std::istream &data)
 
 void writeData_Decimal(std::ostream &out, const RpcValue::Decimal &d)
 {
-	write_IntData(out, d.mantisa());
-	write_IntData(out, d.precision());
+	writeData_Int(out, d.mantisa());
+	writeData_Int(out, d.precision());
 }
 
 template<typename T>
@@ -231,7 +231,7 @@ void writeData_Blob(std::ostream &out, const T &blob)
 {
 	using S = typename T::size_type;
 	S l = blob.length();
-	write_UIntData<S>(out, l);
+	writeData_UInt<S>(out, l);
 	//out.reserve(out.size() + l);
 	for (S i = 0; i < l; ++i)
 		out << (uint8_t)blob[i];
@@ -252,7 +252,7 @@ T readData_Blob(std::istream &data)
 void writeData_DateTime(std::ostream &out, const RpcValue::DateTime &dt)
 {
 	uint64_t msecs = dt.msecs;
-	write_IntData(out, msecs);
+	writeData_Int(out, msecs);
 }
 
 RpcValue::DateTime readData_DateTime(std::istream &data)
@@ -355,7 +355,7 @@ const char *ChainPackProtocol::TypeInfo::name(ChainPackProtocol::TypeInfo::Enum 
 void ChainPackProtocol::writeData_Array(std::ostream &out, const RpcValue::Array &array)
 {
 	unsigned size = array.size();
-	write_UIntData(out, size);
+	writeData_UInt(out, size);
 	for (unsigned i = 0; i < size; ++i) {
 		const RpcValue &cp = array.valueAt(i);
 		writeData(out, cp);
@@ -434,7 +434,7 @@ void ChainPackProtocol::writeData_IMap(std::ostream &out, const RpcValue::IMap &
 	//write_UIntData(out, size);
 	for (const auto &kv : map) {
 		RpcValue::UInt key = kv.first;
-		write_UIntData(out, key);
+		writeData_UInt(out, key);
 		write(out, kv.second);
 	}
 	out << (uint8_t)TypeInfo::TERM;
@@ -521,8 +521,8 @@ void ChainPackProtocol::writeData(std::ostream &out, const RpcValue &pack)
 	switch (type) {
 	case RpcValue::Type::Null: break;
 	case RpcValue::Type::Bool: out << (uint8_t)(pack.toBool() ? 1 : 0); break;
-	case RpcValue::Type::UInt: { auto u = pack.toUInt(); write_UIntData(out, u); break; }
-	case RpcValue::Type::Int: { RpcValue::Int n = pack.toInt(); write_IntData(out, n); break; }
+	case RpcValue::Type::UInt: { auto u = pack.toUInt(); writeData_UInt(out, u); break; }
+	case RpcValue::Type::Int: { RpcValue::Int n = pack.toInt(); writeData_Int(out, n); break; }
 	case RpcValue::Type::Double: writeData_Double(out, pack.toDouble()); break;
 	case RpcValue::Type::Decimal: writeData_Decimal(out, pack.toDecimal()); break;
 	case RpcValue::Type::DateTime: writeData_DateTime(out, pack.toDateTime()); break;
@@ -549,7 +549,7 @@ uint64_t ChainPackProtocol::readUIntData(std::istream &data, bool *ok)
 
 void ChainPackProtocol::writeUIntData(std::ostream &out, uint64_t n)
 {
-	write_UIntData(out, n);
+	writeData_UInt(out, n);
 }
 
 RpcValue ChainPackProtocol::read(std::istream &data)
