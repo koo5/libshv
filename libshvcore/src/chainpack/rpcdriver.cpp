@@ -123,17 +123,12 @@ int RpcDriver::processReadData(const std::string &read_data)
 	using namespace shv::core::chainpack;
 
 	std::istringstream in(read_data);
-	bool ok;
 
-	uint64_t chunk_len = ChainPackProtocol::readUIntData(in, &ok);
-	if(!ok)
-		return 0;
+	uint64_t chunk_len = ChainPackProtocol::readUIntData(in);
 
 	size_t read_len = (size_t)in.tellg() + chunk_len;
 
-	uint64_t protocol_version = ChainPackProtocol::readUIntData(in, &ok);
-	if(!ok)
-		return 0;
+	uint64_t protocol_version = ChainPackProtocol::readUIntData(in);
 
 	if(protocol_version != PROTOCOL_VERSION)
 		SHV_EXCEPTION("Unsupported protocol version");

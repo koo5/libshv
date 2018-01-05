@@ -38,6 +38,17 @@ QDebug operator<<(QDebug debug, const std::string &s)
 
 	return debug;
 }
+
+template< typename T >
+std::string int_to_hex( T i )
+{
+  std::stringstream stream;
+  stream << "0x"
+         //<< std::setfill ('0') << std::setw(sizeof(T)*2)
+         << std::hex << i;
+  return stream.str();
+}
+
 }
 
 class TestRpcValue: public QObject
@@ -271,17 +282,19 @@ private:
 		}
 		{
 			qDebug() << "------------- uint";
-			RpcValue::UInt n_max = std::numeric_limits<RpcValue::UInt>::max();
-			for (RpcValue::UInt n = 3; n < (n_max/3 -1); n *= 3) {
-				RpcValue cp1{n};
-				std::stringstream out;
-				int len = ChainPackProtocol::write(out, cp1);
-				//QVERIFY(len > 1);
-				RpcValue cp2 = ChainPackProtocol::read(out);
-				//if(n < 100*step)
-				qDebug() << n << " " << cp1.toStdString() << " " << cp2.toStdString() << " len: " << len << " dump: " << binary_dump(out.str()).c_str();
-				QVERIFY(cp1.type() == cp2.type());
-				QCOMPARE(cp1.toUInt(), cp2.toUInt());
+			for (unsigned i = 0; i < sizeof(RpcValue::UInt); ++i) {
+				for (unsigned j = 0; j < 3; ++j) {
+					RpcValue::UInt n = RpcValue::UInt{1} << (i*8 + j*3+1);
+					RpcValue cp1{n};
+					std::stringstream out;
+					int len = ChainPackProtocol::write(out, cp1);
+					//QVERIFY(len > 1);
+					RpcValue cp2 = ChainPackProtocol::read(out);
+					//if(n < 100*step)
+					qDebug() << n << int_to_hex(n) << "..." << cp1.toStdString() << " " << cp2.toStdString() << " len: " << len << " dump: " << binary_dump(out.str()).c_str();
+					QVERIFY(cp1.type() == cp2.type());
+					QCOMPARE(cp1.toUInt(), cp2.toUInt());
+				}
 			}
 		}
 		qDebug() << "------------- tiny int";
@@ -299,17 +312,21 @@ private:
 		{
 			qDebug() << "------------- int";
 			{
-				auto n_max = std::numeric_limits<RpcValue::Int>::max();
-				for (int j = 0; j < 2; ++j) {
-					for (RpcValue::Int nn = 3; nn < (n_max/3 -1); nn *= 3) {
-						RpcValue::Int n = (j == 0)? -nn: nn;
-						RpcValue cp1{n};
-						std::stringstream out;
-						int len = ChainPackProtocol::write(out, cp1);
-						RpcValue cp2 = ChainPackProtocol::read(out);
-						qDebug() << n << " " << cp1.toStdString() << " " << cp2.toStdString() << " len: " << len << " dump: " << binary_dump(out.str()).c_str();
-						QVERIFY(cp1.type() == cp2.type());
-						QCOMPARE(cp1.toInt(), cp2.toInt());
+				for (int sig = 1; sig >= -1; sig-=2) {
+					for (unsigned i = 0; i < sizeof(RpcValue::Int); ++i) {
+						for (unsigned j = 0; j < 3; ++j) {
+							RpcValue::Int n = sig * (RpcValue::Int{1} << (i*8 + j*2+2));
+							//qDebug() << sig << i << j << (i*8 + j*3+1) << n;
+							RpcValue cp1{n};
+							std::stringstream out;
+							int len = ChainPackProtocol::write(out, cp1);
+							//QVERIFY(len > 1);
+							RpcValue cp2 = ChainPackProtocol::read(out);
+							//if(n < 100*step)
+							qDebug() << n << int_to_hex(n) << "..." << cp1.toStdString() << " " << cp2.toStdString() << " len: " << len << " dump: " << binary_dump(out.str()).c_str();
+							QVERIFY(cp1.type() == cp2.type());
+							QCOMPARE(cp1.toUInt(), cp2.toUInt());
+						}
 					}
 				}
 			}

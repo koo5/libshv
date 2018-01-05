@@ -1,6 +1,7 @@
 #include "chainpackprotocol.h"
 
 #include "../core/shvexception.h"
+//#include "../core/log.h"
 
 #include <iostream>
 #include <cassert>
@@ -12,178 +13,162 @@ namespace chainpack {
 
 namespace {
 
-/* UInt
-   0 ... 127              |0|x|x|x|x|x|x|x|<-- LSB
-  128 ... 16383 (2^14-1)  |1|0|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-2^14 ... 2097151 (2^21-1) |1|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                          |1|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                          |1|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| ... <-- LSB
-                          n ==  0 -> 4 bytes (32 bit number)
-                          n ==  1 -> 5 bytes
-                          n == 14 -> 19 bytes
-                          n == 15 -> for future (number of bytes will be specified in next byte)
-*/
-constexpr int UINT_MASK_CNT = 4;
 template<typename T>
-T readData_UInt(std::istream &data, bool *ok = nullptr)
+int significant_bits_part_length(T n)
 {
-	T n = 0;
-	constexpr uint8_t masks[UINT_MASK_CNT] = {127, 63, 31, 15};
-	if(data.eof()) {
-		if(ok) {
-			*ok = false;
-			return 0;
-		}
-		SHV_EXCEPTION("read_UInt: unexpected end of stream!");
+	constexpr int bitlen = sizeof(T) * 8;
+	constexpr T mask = T{1} << (bitlen - 1);
+	int len = bitlen;
+	for (; n && !(n & mask); --len) {
+		n <<= 1;
 	}
-	uint8_t head = data.get();
-	int len;
-	if((head & 128) == 0) { len = 1; }
-	else if((head & 64) == 0) { len = 2; }
-	else if((head & 32) == 0) { len = 3; }
-	else if((head & 16) == 0) { len = 4; }
-	else { len = (head & 15) + UINT_MASK_CNT + 1; }
-	if(len < 5) {
-		len--;
-		n = head & masks[len];
-	}
-	else {
-		len--;
-	}
-	for (int i = 0; i < len; ++i) {
-		if(data.eof()) {
-			if(ok) {
-				*ok = false;
-				return 0;
-			}
-			SHV_EXCEPTION("read_UInt: unexpected end of stream!");
-		}
-		uint8_t r = data.get();
-		n = (n << 8) + r;
-	};
-	if(ok)
-		*ok = true;
-	return n;
+	return n? len: 0;
 }
 
-template<typename T>
-void writeData_UInt(std::ostream &out, T n)
+// number of bytes needed to encode bit_len
+int bytes_needed(int bit_len)
 {
-	constexpr int UINT_BYTES_MAX = 19;
-	uint8_t bytes[1 + sizeof(T)];
-	constexpr int prefixes[UINT_MASK_CNT] = {0 << 4, 8 << 4, 12 << 4, 14 << 4};
-	int byte_cnt = 0;
-	do {
-		uint8_t r = n & 255;
-		n = n >> 8;
-		bytes[byte_cnt++] = r;
-	} while(n);
-	if(byte_cnt >= UINT_BYTES_MAX)
-		SHV_EXCEPTION("write_UIntData: value too big to pack!");
-	bytes[byte_cnt] = 0;
-	uint8_t msb = bytes[byte_cnt-1];
-	if(byte_cnt == 1)      { if(msb >= 128) byte_cnt++; }
-	else if(byte_cnt == 2) { if(msb >= 64) byte_cnt++; }
-	else if(byte_cnt == 3) { if(msb >= 32) byte_cnt++; }
-	else if(byte_cnt == 4) { if(msb >= 16) byte_cnt++; }
-	else byte_cnt++;
-	if(byte_cnt > UINT_MASK_CNT) {
-		bytes[byte_cnt-1] = 0xF0 | (byte_cnt - UINT_MASK_CNT - 1);
+	int cnt;
+	if(bit_len <= 28)
+		cnt = (bit_len - 1) / 7 + 1;
+	else
+		cnt = (bit_len - 1) / 8 + 2;
+	return cnt;
+}
+
+/* UInt
+ 0 ...  7 bits  1  byte  |0|x|x|x|x|x|x|x|<-- LSB
+ 8 ... 14 bits  2  bytes |1|0|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+15 ... 21 bits  3  bytes |1|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+22 ... 28 bits  4  bytes |1|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+29+       bits  5+ bytes |1|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| ... <-- LSB
+                    n ==  0 ->  4 bytes number (32 bit number)
+                    n ==  1 ->  5 bytes number
+                    n == 14 -> 18 bytes number
+                    n == 15 -> for future (number of bytes will be specified in next byte)
+*/
+
+template<typename T>
+void writeData_int_helper(std::ostream &out, T num, int bit_len)
+{
+	int byte_cnt = bytes_needed(bit_len);
+	uint8_t bytes[byte_cnt];
+	for (int i = byte_cnt-1; i >= 0; --i) {
+		uint8_t r = num & 255;
+		bytes[i] = r;
+		num = num >> 8;
+	}
+
+	uint8_t &head = bytes[0];
+	if(bit_len <= 28) {
+		uint8_t mask = 0xf0 << (4 - byte_cnt);
+		head = head & ~mask;
+		mask <<= 1;
+		head = head | mask;
 	}
 	else {
-		uint8_t prefix = (uint8_t)prefixes[byte_cnt-1];
-		bytes[byte_cnt-1] |= prefix;
+		head = 0xf0 | (byte_cnt - 5);
 	}
-	for (int i = byte_cnt-1; i >= 0; --i) {
+
+	for (int i = 0; i < byte_cnt; ++i) {
 		uint8_t r = bytes[i];
 		out << r;
 	}
+}
+
+template<typename T>
+void writeData_UInt(std::ostream &out, T num)
+{
+	constexpr int UINT_BYTES_MAX = 18;
+	if(sizeof(num) > UINT_BYTES_MAX)
+		SHV_EXCEPTION("writeData_UInt: value too big to pack!");
+
+	int bitlen = significant_bits_part_length(num);
+	writeData_int_helper<T>(out, num, bitlen);
+}
+
+template<typename T>
+T readData_UInt(std::istream &data, int *pbitlen = nullptr)
+{
+	uint8_t head = data.get();
+
+	T num = 0;
+	int bytes_to_read_cnt, bitlen;
+	if     ((head & 128) == 0) {bytes_to_read_cnt = 0; num = head & 127; bitlen = 7;}
+	else if((head &  64) == 0) {bytes_to_read_cnt = 1; num = head & 63; bitlen = 6 + 8;}
+	else if((head &  32) == 0) {bytes_to_read_cnt = 2; num = head & 31; bitlen = 5 + 2*8;}
+	else if((head &  16) == 0) {bytes_to_read_cnt = 3; num = head & 15; bitlen = 4 + 3*8;}
+	else {
+		bytes_to_read_cnt = (head & 0xf) + 4;
+		bitlen = bytes_to_read_cnt * 8;
+	}
+
+	for (int i = 0; i < bytes_to_read_cnt; ++i) {
+		uint8_t r = data.get();
+		num = (num << 8) + r;
+	};
+	if(pbitlen)
+		*pbitlen = bitlen;
+	return num;
 }
 
 /*
-   0 ... 63              |s|0|x|x|x|x|x|x|<-- LSB
-  64 ... 2^13-1          |s|1|0|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-2^13 ... 2^20-1          |s|1|1|0|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                         |s|1|1|1|n|n|n|n| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
-                          n ==  0 -> 3 bytes
-                          n ==  1 -> 4 bytes
-                          n == 14 -> 18 bytes
-                          n == 15 -> for future (number of bytes will be specified in next byte)
+ 0 ...  7 bits  1  byte  |0|s|x|x|x|x|x|x|<-- LSB
+ 8 ... 14 bits  2  bytes |1|0|s|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+15 ... 21 bits  3  bytes |1|1|0|s|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+22 ... 28 bits  4  bytes |1|1|1|0|s|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x|<-- LSB
+29+       bits  5+ bytes |1|1|1|1|n|n|n|n| |s|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| |x|x|x|x|x|x|x|x| ... <-- LSB
+                    n ==  0 ->  4 bytes number (32 bit number)
+                    n ==  1 ->  5 bytes number
+                    n == 14 -> 18 bytes number
+                    n == 15 -> for future (number of bytes will be specified in next byte)
 */
 
-constexpr int INT_MASK_CNT = 3;
-template<typename T>
-T readData_Int(std::istream &data)
+// return max bit length >= bit_len, which can be encoded by same number of bytes
+int expand_bit_len(int bit_len)
 {
-	T n = 0;
-	constexpr uint8_t masks[INT_MASK_CNT] = {63, 31, 15};
-	if(data.eof())
-		SHV_EXCEPTION("read_UInt: unexpected end of stream!");
-	uint8_t head = data.get();
-	bool s = head & 128;
-	int len;
-	if((head & 64) == 0) { len = 1; }
-	else if((head & 32) == 0) { len = 2; }
-	else if((head & 16) == 0) { len = 3; }
-	else { len = (head & 15) + INT_MASK_CNT + 1; }
-	if(len < 4) {
-		len--;
-		n = head & masks[len];
+	int ret;
+	int byte_cnt = bytes_needed(bit_len);
+	if(bit_len <= 28) {
+		ret = byte_cnt * (8 - 1) - 1;
 	}
 	else {
-		len--;
+		ret = (byte_cnt - 1) * 8 - 1;
 	}
-	for (int i = 0; i < len; ++i) {
-		if(data.eof())
-			SHV_EXCEPTION("read_UInt: unexpected end of stream!");
-		uint8_t r = data.get();
-		n = (n << 8) + r;
-	};
-	if(s)
-		n = -n;
-	return n;
+	return ret;
 }
 
 template<typename T>
-void writeData_Int(std::ostream &out, T n)
+void writeData_Int(std::ostream &out, T snum)
 {
-	constexpr int INT_BYTES_MAX = 18;
-	uint8_t bytes[1 + sizeof(T)];
-	constexpr int prefixes[INT_MASK_CNT] = {0 << 3, 8 << 3, 12 << 3};
-	if(n == std::numeric_limits<T>::min()) {
-		std::cerr << "cannot pack MIN_INT, will be packed as MIN_INT+1\n";
-		n++;
+	using UT = typename std::make_unsigned<T>::type;
+	UT num = snum < 0? -snum: snum;
+	bool neg = snum < 0? true: false;
+
+	int bitlen = significant_bits_part_length(num);
+	bitlen++; // add sign bit
+	if(neg) {
+		int sign_pos = expand_bit_len(bitlen);
+		UT sign_bit_mask = UT{1} << sign_pos;
+		num |= sign_bit_mask;
 	}
-	bool s = (n < 0);
-	if(s)
-		n = -n;
-	int byte_cnt = 0;
-	do {
-		uint8_t r = n & 255;
-		n = n >> 8;
-		bytes[byte_cnt++] = r;
-	} while(n);
-	if(byte_cnt >= INT_BYTES_MAX)
-		SHV_EXCEPTION("write_UIntData: value too big to pack!");
-	bytes[byte_cnt] = 0;
-	uint8_t msb = bytes[byte_cnt-1];
-	if(byte_cnt == 1)      { if(msb >= 64) byte_cnt++; }
-	else if(byte_cnt == 2) { if(msb >= 32) byte_cnt++; }
-	else if(byte_cnt == 3) { if(msb >= 16) byte_cnt++; }
-	else byte_cnt++;
-	if(byte_cnt > 3) {
-		bytes[byte_cnt-1] = 0x70 | (byte_cnt - INT_MASK_CNT - 1);
+	writeData_int_helper(out, num, bitlen);
+}
+
+template<typename T>
+T readData_Int(std::istream &data)
+{
+	int bitlen;
+	using UT = typename std::make_unsigned<T>::type;
+	UT num = readData_UInt<UT>(data, &bitlen);
+	UT sign_bit_mask = UT{1} << (bitlen - 1);
+	bool neg = num & sign_bit_mask;
+	T snum = num;
+	if(neg) {
+		snum &= ~sign_bit_mask;
+		snum = -snum;
 	}
-	else {
-		uint8_t prefix = (uint8_t)prefixes[byte_cnt-1];
-		bytes[byte_cnt-1] |= prefix;
-	}
-	if(s)
-		bytes[byte_cnt-1] |= 128;
-	for (int i = byte_cnt-1; i >= 0; --i) {
-		uint8_t r = bytes[i];
-		out << r;
-	}
+	return snum;
 }
 
 double readData_Double(std::istream &data)
@@ -521,8 +506,8 @@ void ChainPackProtocol::writeData(std::ostream &out, const RpcValue &pack)
 	switch (type) {
 	case RpcValue::Type::Null: break;
 	case RpcValue::Type::Bool: out << (uint8_t)(pack.toBool() ? 1 : 0); break;
-	case RpcValue::Type::UInt: { auto u = pack.toUInt(); writeData_UInt(out, u); break; }
-	case RpcValue::Type::Int: { RpcValue::Int n = pack.toInt(); writeData_Int(out, n); break; }
+	case RpcValue::Type::UInt: { RpcValue::UInt u = pack.toUInt(); writeData_UInt(out, u); break; }
+	case RpcValue::Type::Int: { RpcValue::Int n = pack.toInt(); writeData_Int<RpcValue::Int>(out, n); break; }
 	case RpcValue::Type::Double: writeData_Double(out, pack.toDouble()); break;
 	case RpcValue::Type::Decimal: writeData_Decimal(out, pack.toDecimal()); break;
 	case RpcValue::Type::DateTime: writeData_DateTime(out, pack.toDateTime()); break;
@@ -538,12 +523,9 @@ void ChainPackProtocol::writeData(std::ostream &out, const RpcValue &pack)
 	}
 }
 
-uint64_t ChainPackProtocol::readUIntData(std::istream &data, bool *ok)
+uint64_t ChainPackProtocol::readUIntData(std::istream &data)
 {
-	bool ok2;
-	uint64_t ret = readData_UInt<uint64_t>(data, &ok2);
-	if(ok)
-		*ok = ok2;
+	uint64_t ret = readData_UInt<uint64_t>(data);
 	return ret;
 }
 
