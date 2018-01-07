@@ -41,7 +41,7 @@ def testTinyUint():
 def testUint():
 	print("------------- uint")
 	n_max = (1<<18*8)-1
-	n = 3
+	n = 0
 	while n < (n_max/3 - 1):
 		cp1 = RpcValue(n, Type.UInt);
 		out = ChainPackProtocol()
@@ -52,6 +52,29 @@ def testUint():
 		print(n, " ", cp1, " " ,cp2, " len: " ,l)# ," dump: " ,binary_dump(out.str()).c_str();
 		assert(cp1.toInt() == cp2.toInt());
 		n *= 3
+		n += 1
+
+def testInt():
+	print("------------- int")
+	n_max = (1<<18*8)-1
+	n = 0
+	neg = True
+	while n < (n_max/3 - 1):
+		neg = not neg
+		if neg:
+			ni = -n
+		else:
+			ni = n
+		cp1 = RpcValue(ni, Type.Int);
+		out = ChainPackProtocol()
+		l = out.write(cp1)
+		print(ni, " ", cp1, " len: ", l, " dump: ", out)
+		cp2 = out.read()
+		print(ni, " ", cp1, " " ,cp2, " len: " ,l)# ," dump: " ,binary_dump(out.str()).c_str();
+		cp1.assertEquals(cp2)
+		assert(cp1.toInt() == cp2.toInt());
+		n *= 3
+		n += 1
 
 def testIMap():
 	print("------------- IMap")
@@ -98,6 +121,7 @@ def testMeta():
 
 
 def encode(x):
+	print("encoding:",x)
 	r = ChainPackProtocol(x)
 	print("encoded:",r)
 	return r

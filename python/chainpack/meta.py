@@ -5,3 +5,5 @@ class Tag(enum.IntFlag):
 	MetaTypeId = 1,
 	MetaTypeNameSpaceId = 2,
 	USER = 8
+
+RpcMessageID = 1

@@ -484,11 +484,20 @@ class ChainPackProtocol(bytearray):
 			s.write(v)
 		s.append(TypeInfo.TERMINATION)
 
-	def bytes_needed(s, bit_len: int) -> int:
+	@staticmethod
+	def bytes_needed(bit_len: int) -> int:
 		if (bit_len <= 28):
 			return (bit_len - 1) // 7 + 1;
 		else:
 			return (bit_len - 1) // 8 + 2;
+
+	@staticmethod
+	def expand_bit_len(bit_len: int):
+		byte_cnt = ChainPackProtocol.bytes_needed(bit_len);
+		if(bit_len <= 28):
+			return byte_cnt * (8 - 1) - 1;
+		else:
+			return (byte_cnt - 1) * 8 - 1;
 
 	def writeData_UInt(s, num):
 		assert num >= 0
@@ -511,13 +520,14 @@ class ChainPackProtocol(bytearray):
 		byte_cnt = s.bytes_needed(bit_len);
 		b = bytearray()
 		for i in range(byte_cnt - 1, -1, -1):
-			b.insert(0, num & 255)
+			byte = num & 255
+			b.insert(0, byte)
 			num = num >> 8;
 		head = b[0];
 		if (bit_len <= 28):
-			mask = 0xf0 << (4 - byte_cnt);
-			head = head & ~mask;
-			mask = mask << 1;
+			mask = (0xf0 << (4 - byte_cnt)) & 255;
+			head = (head & ~mask) & 255;
+			mask = (mask << 1) & 255;
 			head = head | mask;
 		else:
 			head = 0xf0 | (byte_cnt - 5);
@@ -525,8 +535,8 @@ class ChainPackProtocol(bytearray):
 		s.add(b)
 
 	def readData_Int(s):
-		num = readData_UInt(data);
-		sign_bit_mask = 1 << (num.bit_length() - 1);
+		num, bitlen = s._readData_UInt();
+		sign_bit_mask = 1 << (bitlen - 1);
 		neg = num & sign_bit_mask;
 		snum = num;
 		if (neg):
@@ -535,6 +545,9 @@ class ChainPackProtocol(bytearray):
 		return snum;
 
 	def readData_UInt(s):
+		return s._readData_UInt()[0]
+
+	def _readData_UInt(s):
 		head = s.get()
 		num = 0
 		if  ((head & 128) == 0): bytes_to_read_cnt = 0; num = head & 127; bitlen = 7;
@@ -543,9 +556,10 @@ class ChainPackProtocol(bytearray):
 		elif ((head & 16) == 0): bytes_to_read_cnt = 3; num = head & 15; bitlen = 4 + 3 * 8;
 		else:
 			bytes_to_read_cnt = (head & 0xf) + 4;
+			bitlen = bytes_to_read_cnt * 8;
 		for i in range(bytes_to_read_cnt):
 			num = (num << 8) + s.get()
-		return num
+		return num, bitlen
 
 	def readData_Array(s, item_type_info):
 		#item_type = typeInfoToType(item_type_info)

@@ -42,7 +42,7 @@ class RpcMessage():
 		return s.__getitem__(key)
 
 	def setValue(s, key: uint, val: RpcValue):
-		assert(key >= meta.RpcMessage.Key.Method and key < meta.RpcMessage.Key.MAX);
+		assert(key >= Key.Method and key < Key.MAX);
 		s.checkMetaValues();
 		s._value.set(key, val);
 
@@ -70,25 +70,25 @@ class RpcMessage():
 
 	def write(out: ChainPackProtocol) -> int:
 		assert(s._value.isValid());
-		assert(rpcType() != meta.RpcMessage.RpcCallType.Undefined);
+		assert(rpcType() != RpcCallType.Undefined);
 		return out.write(s._value);
 
-	def rpcType(s) -> meta.RpcMessage.RpcCallType.Enum:
+	def rpcType(s) -> RpcCallType.Enum:
 		rpc_id: int = s.id();
-		has_method: bool = s.hasKey(meta.RpcMessage.Key.Method);
+		has_method: bool = s.hasKey(Key.Method);
 		if(has_method):
 			if rpc_id > 0:
-				return meta.RpcMessage.RpcCallType.Request
+				return RpcCallType.Request
 			else:
-				return meta.RpcMessage.RpcCallType.Notify;
-		if s.hasKey(meta.RpcMessage.Key.Result) or s.hasKey(meta.RpcMessage.Key.Error):
-			return meta.RpcMessage.RpcCallType.Response;
-		return meta.RpcMessage.RpcCallType.Undefined;
+				return RpcCallType.Notify;
+		if s.hasKey(Key.Result) or s.hasKey(Key.Error):
+			return RpcCallType.Response;
+		return RpcCallType.Undefined;
 
 	def checkMetaValues(s) -> None:
 		if not s._value.isValid():
 			s._value = RpcValue({}, Type.IMap)
-			s._value.setMetaValue(meta.Tag.MetaTypeId, meta.RpcMessage.ID);
+			s._value.setMetaValue(Tag.MetaTypeId, meta.RpcMessageID);
 
 	def checkRpcTypeMetaValue(s):
 		if s.isResponse():
