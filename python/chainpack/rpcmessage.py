@@ -92,12 +92,12 @@ class RpcMessage():
 
 	def checkRpcTypeMetaValue(s):
 		if s.isResponse():
-			rpc_type = meta.RpcMessage.RpcCallType.Response
+			rpc_type = RpcCallType.Response
 		elif s.isNotify():
-			rpc_type = meta.RpcMessage.RpcCallType.Notify
+			rpc_type = RpcCallType.Notify
 		else:
 			rpc_type = RpcMessage.RpcCallType.Request
-		s.setMetaValue(meta.RpcMessage.Tag.RpcCallType, rpc_type);
+		s.setMetaValue(Tag.RpcCallType, rpc_type);
 
 	def method(s) -> str:
 		return value(Key.Method).toString();
@@ -124,16 +124,34 @@ class RpcMessage():
 
 class RpcRequest(RpcMessage):
 	def params(s) -> RpcValue:
-		return value(meta.RpcMessage.Key.Params);
+		return value(Key.Params);
 
 	def setParams(s, p: RpcValue):
-		s.setValue(meta.RpcMessage.Key.Params, p);
+		s.setValue(Key.Params, p);
 
 
 
 
 class RpcResponse(RpcMessage):
+
+	class Key(enum.IntFlag):
+		Code = 1,
+		KeyMessage = 2
+
+	class ErrorType(enum.IntFlag):
+		NoError = 0,
+		InvalidRequest = 1,
+		MethodNotFound = 2,
+		InvalidParams = 3,
+		InternalError = 4,
+		ParseError = 5,
+		SyncMethodCallTimeout = 6,
+		SyncMethodCallCancelled = 7,
+		MethodInvocationException = 8,
+		Unknown = 9
+
 	class Error(dict):
+
 		class Key(enum.IntFlag):
 			Code = 1,
 			Message
@@ -171,11 +189,11 @@ class RpcResponse(RpcMessage):
 
 	def setError(self, RpcResponse: err) -> RpcResponse:
 		setRpcValue(Key.Error, RpcValue(err));
-		checkRpcTypeMetaValue();
+		s.checkRpcTypeMetaValue();
 
 	def result(self) -> RpcValue:
-		return value(meta.RpcMessage.Key.Result);
+		return value(Key.Result);
 
 	def setResult(self, res: RpcValue) -> RpcResponse:
-		s.setValue(meta.RpcMessage.Key.Result, res);
+		s.setValue(Key.Result, res);
 
