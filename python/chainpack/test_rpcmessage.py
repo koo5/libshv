@@ -2,10 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-try:
-	import better_exceptions
-except:
-	pass
 from rpcmessage import *
 
 def testRpcRequest():
@@ -21,10 +17,10 @@ def testRpcRequest():
 	cp1 = rq.value
 	out = ChainPackProtocol()
 	len = rq.write(out);
-	RpcValue: cp2 = out.read()
+	cp2: RpcValue = out.read()
 	print (cp1, " " ,cp2," len: " << len << " dump: " ,out);
 	assert cp1.type == cp2.type
-	RpcRequest: rq2(cp2);
+	rq2 = RpcRequest(cp2)
 	assert rq2.isRequest()
 	assert rq2.id == rq.id
 	assert rq2.method == rq.method
