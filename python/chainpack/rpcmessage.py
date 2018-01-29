@@ -6,8 +6,8 @@ class uint(int):
 	pass
 
 
-
 class RpcMessage():
+
 	class Key(enum.IntFlag):
 		Id = 1,
 		Method = 2,
@@ -73,7 +73,7 @@ class RpcMessage():
 		assert(rpcType() != RpcCallType.Undefined);
 		return out.write(s._value);
 
-	def rpcType(s) -> RpcCallType.Enum:
+	def rpcType(s) -> RpcCallType:
 		rpc_id: int = s.id();
 		has_method: bool = s.hasKey(Key.Method);
 		if(has_method):
@@ -121,7 +121,6 @@ class RpcMessage():
 	#	s._value[key] = val
 
 
-
 class RpcRequest(RpcMessage):
 	def params(s) -> RpcValue:
 		return value(Key.Params);
@@ -129,9 +128,8 @@ class RpcRequest(RpcMessage):
 	def setParams(s, p: RpcValue):
 		s.setValue(Key.Params, p);
 
-
-
-
+class RpcResponse:
+	pass
 class RpcResponse(RpcMessage):
 
 	class Key(enum.IntFlag):
@@ -154,32 +152,32 @@ class RpcResponse(RpcMessage):
 
 		class Key(enum.IntFlag):
 			Code = 1,
-			Message
+			Message = 2
 
 		class ErrorType(enum.IntFlag):
 			NoError = 0,
-			InvalidRequest,	#// The JSON sent is not a valid Request object.
-			MethodNotFound,	#// The method does not exist / is not available.
-			InvalidParams,	#// Invalid method parameter(s).
-			InternalError,	#// Internal JSON-RPC error.
-			ParseError,		#// Invalid JSON was received by the server. An error occurred on the server while parsing the JSON text.
-			SyncMethodCallTimeout,
-			SyncMethodCallCancelled,
-			MethodInvocationException,
-			Unknown
+			InvalidRequest = 1,	#// The JSON sent is not a valid Request object.
+			MethodNotFound = 2,
+			InvalidParams = 3,
+			InternalError = 4,
+			ParseError = 5,
+			SyncMethodCallTimeout = 5,
+			SyncMethodCallCancelled = 6,
+			MethodInvocationException = 7,
+			Unknown = 8
 
 		def code(s) -> ErrorType:
 			if Key.Code in s:
 				return s[Key.Code].toUInt();
 			return ErrorType.NoError
 
-		def setCode(s, ErrorType: c) -> Error:
+		def setCode(s, c: ErrorType):
 			s[KeyCode] = RpcValue(uint(c));
 			return s;
 
-		def setMessage(s, msg: str) -> Error:
+		def setMessage(s, msg: str):
 			s[KeyMessage] = RpcValue(msg);
-			return self
+			return s
 
 		def message(s) -> str:
 			return s.get([Key.KeyMessage.toString()], "")
@@ -187,7 +185,7 @@ class RpcResponse(RpcMessage):
 	def error(self) -> Error:
 		return Error(value(meta.RpcResponse.Error).toImap());
 
-	def setError(self, RpcResponse: err) -> RpcResponse:
+	def setError(self, err: RpcResponse) -> RpcResponse:
 		setRpcValue(Key.Error, RpcValue(err));
 		s.checkRpcTypeMetaValue();
 

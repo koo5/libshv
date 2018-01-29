@@ -1,17 +1,19 @@
-import attr
 import struct
 from datetime import datetime
 import enum
-import typing, types
+#import typing, types
 import logging_config
 import logging
 from copy import deepcopy
 from math import floor
 
+import meta
+
+
 debug = logging.debug
 ARRAY_FLAG_MASK = 64
 
-import meta
+
 
 class ChainpackException(Exception):
 	pass
@@ -61,6 +63,7 @@ class TypeInfo(enum.IntFlag):
 	TRUE=254
 	TERMINATION = 255
 
+
 class Type(enum.IntFlag):
 	INVALID = -1
 	Null=134
@@ -76,6 +79,7 @@ class Type(enum.IntFlag):
 	Map=144
 	IMap=145
 	MetaIMap=146
+
 
 def typeToTypeInfo(type: Type):
 	if type == Type.INVALID:  raise Exception("There is no type info for type Invalid");
@@ -239,6 +243,7 @@ def optimizeRpcValueIntoType(pack: RpcValue) -> int:
 			return TypeInfo.Null
 		return None
 
+
 class ChainPackProtocol(bytearray):
 	DOUBLE_FMT = '!d'
 
@@ -313,21 +318,6 @@ class ChainPackProtocol(bytearray):
 			out.append(t)
 			out.writeData(value)
 		return out
-
-	"""
-	
-		for key in md.keys():
-			type = optimizedMetaTagType(key)
-			if(type != TypeInfo.INVALID):
-				assert(type >= 0 and type <= 255)
-				s.append(type)
-				val = md[key]
-				assert(val >= 0 and val <= 255)
-				s.write_UIntData(val)
-			else:
-				imap.value[key] = md[key]
-		if len(imap):
-	"""
 
 	def readMetaData(s) -> MetaData:
 		ret = MetaData()
