@@ -39,7 +39,7 @@ QDebug operator<<(QDebug debug, const std::string &s)
 	return debug;
 }
 
-std::string binary_dump(const RpcValue::Blob &out)
+	std::string binary_dump(const RpcValue::Blob &out)
 {
 	std::string ret;
 	for (size_t i = 0; i < out.size(); ++i) {

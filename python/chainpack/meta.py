@@ -6,10 +6,8 @@ class Tag(enum.IntFlag):
 	MetaTypeNameSpaceId = 2,
 	USER = 8
 
-RpcMessageID = 1
-
-
 class RpcMessage():
+	ID = 1
 
 	class Key(enum.IntFlag):
 		Method = 2,

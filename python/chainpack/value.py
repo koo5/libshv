@@ -10,9 +10,11 @@ from math import floor
 import meta
 
 
+class uint(int):
+	pass
+
 debug = logging.debug
 ARRAY_FLAG_MASK = 64
-
 
 
 class ChainpackException(Exception):
@@ -114,8 +116,10 @@ def typeInfoToType(type_info: TypeInfo) -> Type:
 	raise Exception("There is no Type for TypeInfo %s"%(type_info));
 
 def chainpackTypeFromPythonType(t):
+	if t == InvalidValue:  return Type.INVALID,
 	if t == type(None):  return Type.Null,
 	if t == bool:        return Type.Bool,
+	if t == uint:        return Type.UInt,
 	if t == int:         return Type.Int, Type.UInt,
 	if t == float:       return Type.Double,
 	if t == datetime:    return Type.DateTime,
@@ -124,6 +128,10 @@ def chainpackTypeFromPythonType(t):
 	if t == dict:        return Type.Map, Type.IMap
 	raise ChainpackTypeException("failed deducing chainpack type for python type %s"%t)
 
+class InvalidValue():
+	pass
+
+invalid_value = InvalidValue()
 
 class RpcValue():
 	def __init__(s, value, t = None):
@@ -133,11 +141,11 @@ class RpcValue():
 			s._metaData = deepcopy(value._metaData)
 		else:
 			s._metaData = {}
-			if type(value) == list:
+			if isinstance(value, list):
 				s._value = []
 				for i in value:
 					s._value.append(RpcValue(i))
-			elif type(value) == dict:
+			elif isinstance(value, dict):
 				s._value = {}
 				for k,v in value.items():
 					if t == Type.IMap:
@@ -145,17 +153,19 @@ class RpcValue():
 						s._value[k] = RpcValue(v)
 					else:
 						s._value[k] = RpcValue(v)
+			elif isinstance(value, enum.IntFlag):
+				s._value = int(value)
 			else:
 				s._value = value
 
 			if t == None:
-				t = chainpackTypeFromPythonType(type(value))[0]
+				t = chainpackTypeFromPythonType(type(s._value))[0]
 			s._type = t
 		if s._type not in chainpackTypeFromPythonType(type(s._value)):
 			raise ChainpackTypeException("python type %s for value %s does not match chainpack type %s" % (type(s._value), s._value, s._type))
 
 	def __eq__(s, x):
-		return s.type == x.type and s.value == x.value and s._metaData == x._metaData
+		return isinstance(x, RpcValue) and s.type == x.type and s.value == x.value and s._metaData == x._metaData
 
 	def assertEquals(s, x):
 		assert s.type == x.type
@@ -208,9 +218,20 @@ class RpcValue():
 		assert s._type in [Type.Int, Type.UInt]
 		return s._value
 
+	def toUInt(s) -> uint:
+		assert s._type in [Type.UInt]
+		return uint(s._value)
+
 	def toBool(s) -> bool:
 		assert s._type in [Type.Bool]
 		return s._value
+
+	def toString(s):
+		assert s._type in [Type.String]
+		return s._value
+
+	def isIMap(s):
+		return s._type == Type.IMap
 
 	def setMetaValue(s, tag, value):
 		value = RpcValue(value)

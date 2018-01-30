@@ -2,29 +2,28 @@ import enum
 import meta
 from value import *
 
-class uint(int):
-	pass
-
 
 class RpcMessage():
 	def __init__(s, val: RpcValue = None) -> None:
 		if val == None:
-			val = RpcValue(None)
+			val = RpcValue(invalid_value, Type.INVALID)
 		else:
 			assert(val.isIMap());
 		s._value: RpcValue = val;
 
 	def hasKey(s, key: meta.RpcMessage.Key) -> bool:
-		assert(s._value.type == Type.IMap)
-		return key in s._value
+		if s._value.type == Type.IMap:
+			return key in s._value.toPython()
+		else:
+			return False
 
 	def value(s, key: uint) -> RpcValue:
-		return s.__getitem__(key)
+		return s._value._value[key]
 
 	def setValue(s, key: uint, val: RpcValue):
 		assert(key >= meta.RpcMessage.Key.Method and key < meta.RpcMessage.Key.MAX);
 		s.checkMetaValues();
-		s._value.set(key, val);
+		s._value._value[key] = val
 
 	def setMetaValue(s, key: int, val: RpcValue):
 		s.checkMetaValues();
@@ -35,24 +34,24 @@ class RpcMessage():
 			return s._value._metaData[meta.RpcMessage.Tag.RequestId].toUInt();
 		return 0
 
-	def setId(s, id: uint) -> None:
+	def setId(s, id: (uint, int)) -> None:
 		s.checkMetaValues();
 		s.checkRpcTypeMetaValue();
-		s.setMetaValue(meta.RpcMessage.Key.Id, RpcValue(id));
+		s.setMetaValue(meta.RpcMessage.Tag.RequestId, RpcValue(uint(id)));
 
 	def isValid(s) -> bool:
 		return s._value.isValid()
 
 	def isRequest(s) -> bool:
-		return s.hasKey(meta.RpcMessage.Key.Method);
+		return s.rpcType() == meta.RpcMessage.RpcCallType.Request
 
 	def isNotify(s) -> bool:
-		return s.isRequest() and not s.hasKey(meta.RpcMessage.Key.Id);
+		return s.rpcType() == meta.RpcMessage.RpcCallType.Notify
 
 	def isResponse(s) -> bool:
-		return s.rpcType() == hasKey(meta.RpcMessage.RpcCallType.Response)
+		return s.rpcType() == meta.RpcMessage.RpcCallType.Response
 
-	def write(out: ChainPackProtocol) -> int:
+	def write(s, out: ChainPackProtocol) -> int:
 		assert(s._value.isValid());
 		assert(s.rpcType() != meta.RpcMessage.RpcCallType.Undefined);
 		return out.write(s._value);
@@ -72,7 +71,7 @@ class RpcMessage():
 	def checkMetaValues(s) -> None:
 		if not s._value.isValid():
 			s._value = RpcValue({}, Type.IMap)
-			s._value.setMetaValue(meta.Tag.MetaTypeId, meta.RpcMessageID);
+			s._value.setMetaValue(meta.Tag.MetaTypeId, meta.RpcMessage.ID);
 
 	def checkRpcTypeMetaValue(s):
 		if s.isResponse():
@@ -84,10 +83,10 @@ class RpcMessage():
 		s.setMetaValue(meta.RpcMessage.Tag.RpcCallType, rpc_type);
 
 	def method(s) -> str:
-		return value(meta.RpcMessage.Key.Method).toString();
+		return s.value(meta.RpcMessage.Key.Method).toString();
 
 	def setMethod(s, met: str) -> None:
-		s.setRpcValue(meta.RpcMessage.Key.Method, RpcValue(met));
+		s.setValue(meta.RpcMessage.Key.Method, RpcValue(met));
 
 	def params(s) -> RpcValue:
 		return value(meta.RpcMessage.Key.Params);
@@ -98,10 +97,10 @@ class RpcMessage():
 
 class RpcRequest(RpcMessage):
 	def params(s) -> RpcValue:
-		return value(meta.RpcMessage.Key.Params);
+		return s.value(meta.RpcMessage.Key.Params);
 
 	def setParams(s, p: RpcValue):
-		s.setValue(meta.RpcMessage.Key.Params, p);
+		s.setValue(meta.RpcMessage.Key.Params, RpcValue(p));
 
 
 class RpcResponse:
@@ -132,7 +131,7 @@ class RpcResponse(RpcMessage):
 
 		class ErrorType(enum.IntFlag):
 			NoError = 0,
-			InvalidRequest = 1,	#// The JSON sent is not a valid Request object.
+			InvalidRequest = 1,
 			MethodNotFound = 2,
 			InvalidParams = 3,
 			InternalError = 4,
@@ -142,32 +141,40 @@ class RpcResponse(RpcMessage):
 			MethodInvocationException = 7,
 			Unknown = 8
 
+		@classmethod
+		def createError(cls, code, message):
+			r = cls()
+			r.setCode(code)
+			r.setMessage(message)
+			return r
+
 		def code(s) -> ErrorType:
 			if Key.Code in s:
 				return s[Key.Code].toUInt();
 			return ErrorType.NoError
 
 		def setCode(s, c: ErrorType):
-			s[KeyCode] = RpcValue(uint(c));
+			s[s.__class__.Key.Code] = RpcValue(uint(c));
 			return s;
 
 		def setMessage(s, msg: str):
-			s[KeyMessage] = RpcValue(msg);
+			s[s.__class__.Key.Message] = RpcValue(msg);
 			return s
 
 		def message(s) -> str:
 			return s.get([Key.Message.toString()], "")
 
-	def error(self) -> Error:
-		return Error(value(meta.RpcMessage.Key.Error).toImap());
+	def error(s) -> Error:
+		return RpcResponse.Error(s.value(meta.RpcMessage.Key.Error).toPython());
 
-	def setError(self, err: RpcResponse) -> RpcResponse:
-		setRpcValue(Key.Error, RpcValue(err));
+	def setError(s, err):
+		s.setValue(meta.RpcMessage.Key.Error, RpcValue(err, Type.IMap));
 		s.checkRpcTypeMetaValue();
 
-	def result(self) -> RpcValue:
-		return value(Key.Result);
+	def result(s) -> RpcValue:
+		return s.value(meta.RpcMessage.Key.Result);
 
-	def setResult(self, res: RpcValue) -> RpcResponse:
-		s.setValue(Key.Result, res);
+	def setResult(s, res: RpcValue) -> RpcResponse:
+		s.setValue(meta.RpcMessage.Key.Result, RpcValue(res));
+		s.checkRpcTypeMetaValue();
 
