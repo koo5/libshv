@@ -1,51 +1,41 @@
 #!/usr/bin/python3.6
 # -*- coding: utf-8 -*-
 
+
 HOST, PORT = "127.0.0.1", 6016
+
 
 import sys
 import socket
 from threading import Thread
 from queue import Queue, Empty
 import socketserver
-
-
 import logging
+from rpcdriver import RpcDriver
+from value import RpcValue
+
+
 logger=logging.getLogger()
-
-from utils import _print
-
+from utils import print_to_string
 def log(*vargs):
-	logger.debug(_print(*vargs))
-
+	logger.debug(print_to_string(*vargs))
 def info(*vargs):
-	logger.info(_print(*vargs))
+	logger.info(print_to_string(*vargs))
 
 
-class MyTCPHandler(socketserver.BaseRequestHandler):
-	def handle(self):
-		print("handle")
-		try:
-			data = bytes()
-			while True:
-				inc = self.request.recv(240000)
-				if len(inc) == 0:
-					continue
-				data += inc
-				data_str = str(data, 'utf-8')
-				if '\n' in data_str:
-					print("{} wrote:".format(self.client_address[0]))
-					print(data_str);
-					sys.stdout.flush();
-					self.request.sendall(data.upper())
-					command_queue.put(data_str)
-					send_thread_message()
-					print("bye")
-					return
-		except Exception as e:
-			print(str(e))
-			return
-		print("ThreadedTCPRequestHandler shutting down...")
+
+class MyTCPHandler(RpcDriver, socketserver.BaseRequestHandler):
+	def handle(s):
+		while True:
+			s.bytesRead(s.request.recv(240000))
+
+	def writeBytes(s, b):
+		s.request.sendall(b)
+
+	def onMessageReceived(msg: RpcValue):
+		p = msg.toPython()
+		s.sendResponse(p["id"], msg)
+
 
 
 server = socketserver.TCPServer((HOST, PORT), MyTCPHandler)

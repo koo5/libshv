@@ -6,27 +6,23 @@ import socket
 from threading import Thread
 from queue import Queue, Empty
 import socketserver
-
-
 import logging
+
+
 logger=logging.getLogger()
-
-from utils import _print
-
+from utils import print_to_string
 def log(*vargs):
-	logger.debug(_print(*vargs))
-
+	logger.debug(print_to_string(*vargs))
 def info(*vargs):
-	logger.info(_print(*vargs))
+	logger.info(print_to_string(*vargs))
 
 
 
 class SocketRpcDriver(RpcDriver):
-	def bytesToWrite():
+	def bytesToWrite(s):
 		return m_bytesToWrite.length();
 
-
-int64_t SocketRpcDriver::writeBytes(const char *bytes, size_t length)
+	def writeBytes(s, b):
 {
 	if(!isOpen()) {
 		shvInfo() << "Write to closed socket";
@@ -168,19 +164,3 @@ void SocketRpcDriver::exec()
 	}
 }
 
-void SocketRpcDriver::sendResponse(int request_id, const cp::RpcValue &result)
-{
-	cp::RpcResponse resp;
-	resp.setId(request_id);
-	resp.setResult(result);
-	shvInfo() << "sending response:" << resp.toStdString();
-	sendMessage(resp.value());
-}
-
-def sendNotify(s, method: str, result: RpcValue):
-	log("sending notify:%s", method)
-	cp::RpcNotify ntf;
-	ntf.setMethod(std::move(method));
-	ntf.setParams(result);
-	sendMessage(ntf.value());
-}
