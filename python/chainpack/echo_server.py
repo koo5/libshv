@@ -20,19 +20,19 @@ def info(*vargs):
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
 	def handle(s):
-		driver = RpcDriver()
-		driver.writeBytes = s.writeBytes
-		driver.onMessageReceived = s.onMessageReceived
+		s.driver = RpcDriver()
+		s.driver.writeBytes = s.writeBytes
+		s.driver.onMessageReceived = s.onMessageReceived
 		while True:
-			driver.bytesRead(s.request.recv(240000))
+			s.driver.bytesRead(s.request.recv(240000))
 
 	def writeBytes(s, b):
 		s.request.sendall(b)
 
-	def onMessageReceived(msg: RpcValue):
+	def onMessageReceived(s, msg: RpcValue):
 		p = msg.toPython()
-		s.sendResponse(p["id"], msg)
-
+		print ("message received:", p)
+		s.driver.sendResponse(0, msg)
 
 def serve(host = "127.0.0.1", port=6016):
 	server = socketserver.TCPServer((host, port), MyTCPHandler)

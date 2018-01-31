@@ -35,20 +35,21 @@ class RpcDriver():
 		s.writeBytes(chunk)
 
 	def bytesRead(s, b: bytes):
+		if len(b) == 0:
+			return
 		log(len(b), "bytes of data read")
 		s.m_readData += b
 		while True:
 			l: int = s.processReadData(s.m_readData);
 			log(l, "bytes of" , len(s.m_readData), "processed")
 			if(l > 0):
-				s.m_readData = s.m_readData[:l]
+				s.m_readData = s.m_readData[l:]
 			else:
 				break;
 
 	def tryRead_UIntData(s, input):
 		try:
-			p = ChainPackProtocol(input)
-			return True, p.readData_UInt();
+			return True, input.readData_UInt();
 		except ChainpackDeserializationException:
 			return False, -1
 
@@ -59,12 +60,13 @@ class RpcDriver():
 		ok, chunk_len = s.tryRead_UIntData(input);
 		if not ok:
 			return 0;
+		received_len = len(input)
 		ok, protocol_version = s.tryRead_UIntData(input);
 		if not ok:
 			return 0;
 		if protocol_version != s.PROTOCOL_VERSION:
 			raise Exception("Unsupported protocol version");
-		if(chunk_len > len(input)):
+		if(chunk_len > received_len):
 			return 0;
 		msg: RpcValue = input.read()
 		s.onMessageReceived(msg);
