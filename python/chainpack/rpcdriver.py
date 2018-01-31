@@ -3,6 +3,7 @@
 
 from value import *
 import logging
+from rpcmessage import *
 
 
 logger=logging.getLogger()
@@ -24,9 +25,11 @@ class RpcDriver():
 
 	def sendMessage(s, msg: RpcValue):
 		chunk = ChainPackProtocol(msg)
-		log("send message: packed data: ",  chunk[:50] + "<... long data ...>" if packed_data.size() > 50 else chunk)
-		protocol_version_data = ChainPackProtocol(RpcValue(PROTOCOL_VERSION, Type.UInt))
-		packet_len_data = ChainPackProtocol(out.write(RpcValue(len(protocol_version_data) + len(chunk), Type.UInt)))
+		log("send message: packed data: ",  chunk[:50] + "<... long data ...>" if len(chunk) > 50 else chunk)
+		protocol_version_data = ChainPackProtocol()
+		protocol_version_data.writeData_UInt(s.PROTOCOL_VERSION)
+		packet_len_data = ChainPackProtocol()
+		packet_len_data.writeData_UInt(len(protocol_version_data) + len(chunk))
 		s.writeBytes(packet_len_data)
 		s.writeBytes(protocol_version_data)
 		s.writeBytes(chunk)
@@ -42,23 +45,24 @@ class RpcDriver():
 			else:
 				break;
 
-	def tryReadUIntData(s, input):
+	def tryRead_UIntData(s, input):
 		try:
-			return True, read_UIntData(input);
-		except DeserializationException:
+			p = ChainPackProtocol(input)
+			return True, p.readData_UInt();
+		except ChainpackDeserializationException:
 			return False, -1
 
 	def processReadData(s, read_data: bytes) -> int:
-		log("processReadData data len:", len(read_data))
+		log("processReadData data len:", len(read_data), ":", read_data)
 		initial_len = len(read_data)
 		input = ChainPackProtocol(read_data)
 		ok, chunk_len = s.tryRead_UIntData(input);
 		if not ok:
 			return 0;
-		ok, protocol_version = s.tryReadUIntData(input);
+		ok, protocol_version = s.tryRead_UIntData(input);
 		if not ok:
 			return 0;
-		if protocol_version != PROTOCOL_VERSION:
+		if protocol_version != s.PROTOCOL_VERSION:
 			raise Exception("Unsupported protocol version");
 		if(chunk_len > len(input)):
 			return 0;
@@ -73,13 +77,20 @@ class RpcDriver():
 		info("sending response:", resp)
 		s.sendMessage(resp._value);
 
+	def sendRequest(s, method: str, params: RpcValue):
+		msg = RpcRequest()
+		msg.setMethod(method);
+		msg.setParams(params);
+		info("sending request:", method)
+		s.sendMessage(msg._value);
+	"""
 	def sendNotify(s, method: str, result: RpcValue):
-		info("sending notify:%s", method)
 		ntf = RpcNotify()
 		ntf.setMethod(method);
 		ntf.setParams(result);
+		info("sending notify:", method)
 		s.sendMessage(ntf._value);
-
+	"""
 
 	"""
 	def enqueueDataToSend(chunk_to_enqueue: Chunk):

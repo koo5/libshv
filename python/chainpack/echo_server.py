@@ -2,13 +2,6 @@
 # -*- coding: utf-8 -*-
 
 
-HOST, PORT = "127.0.0.1", 6016
-
-
-import sys
-import socket
-from threading import Thread
-from queue import Queue, Empty
 import socketserver
 import logging
 from rpcdriver import RpcDriver
@@ -24,10 +17,14 @@ def info(*vargs):
 
 
 
-class MyTCPHandler(RpcDriver, socketserver.BaseRequestHandler):
+class MyTCPHandler(socketserver.BaseRequestHandler):
+
 	def handle(s):
+		driver = RpcDriver()
+		driver.writeBytes = s.writeBytes
+		driver.onMessageReceived = s.onMessageReceived
 		while True:
-			s.bytesRead(s.request.recv(240000))
+			driver.bytesRead(s.request.recv(240000))
 
 	def writeBytes(s, b):
 		s.request.sendall(b)
@@ -37,6 +34,12 @@ class MyTCPHandler(RpcDriver, socketserver.BaseRequestHandler):
 		s.sendResponse(p["id"], msg)
 
 
+def serve(host = "127.0.0.1", port=6016):
+	server = socketserver.TCPServer((host, port), MyTCPHandler)
+	print("serving on port ", server.socket.getsockname()[1])
+	server.serve_forever()
 
-server = socketserver.TCPServer((HOST, PORT), MyTCPHandler)
-server.serve_forever()
+
+if __name__ == "__main__":
+	serve()
+
